@@ -1,0 +1,265 @@
+"""command-block — RCON-shaped admin dashboard for the minecraft stack.
+
+No Docker socket, no state, no database. Everything is RCON plus a
+read-only log mount; config comes from the environment only.
+"""
+
+import base64
+import os
+import re
+import secrets
+from collections import deque
+from pathlib import Path
+from typing import Literal
+
+from fastapi import FastAPI, Query, Request, Response
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from mcstatus import JavaServer
+from pydantic import BaseModel
+
+from app import rcon
+from app.rcon import RconError
+
+PING_PORT = 25565  # server-list ping; RCON port comes from the env
+STATIC_DIR = Path(__file__).parent / "static"
+MAX_LOG_LINES = 500
+
+app = FastAPI(title="command-block", docs_url=None, redoc_url=None, openapi_url=None)
+
+
+def _env(name: str, default: str | None = None) -> str | None:
+    return os.environ.get(name, default)
+
+
+def _log_file() -> Path:
+    return Path(_env("LOG_FILE", "/mc-logs/latest.log"))
+
+
+async def rcon_command(command: str, *, expect_disconnect: bool = False) -> str:
+    return await rcon.execute(
+        _env("RCON_HOST", "minecraft"),
+        int(_env("RCON_PORT", "25575")),
+        _env("RCON_PASSWORD", ""),
+        command,
+        expect_disconnect=expect_disconnect,
+    )
+
+
+# ---------------------------------------------------------------- parsers
+
+_LIST_RE = re.compile(r"There are (\d+) of a max of (\d+) players online:?\s*(.*)", re.I)
+_NAME_RE = re.compile(r"^[A-Za-z0-9_]{1,16}$")
+
+
+def strip_colors(raw: str) -> str:
+    return re.sub("§.", "", raw)
+
+
+def parse_list(raw: str) -> dict:
+    m = _LIST_RE.search(strip_colors(raw))
+    if not m:
+        return {"online": None, "max": None, "players": [], "raw": raw}
+    players = [p.strip() for p in m.group(3).split(",") if p.strip()]
+    return {"online": int(m.group(1)), "max": int(m.group(2)), "players": players, "raw": raw}
+
+
+def parse_whitelist(raw: str) -> list[str]:
+    cleaned = strip_colors(raw)
+    if ":" not in cleaned:  # "There are no whitelisted players"
+        return []
+    names = re.split(r",|\band\b", cleaned.split(":", 1)[1])
+    return [n.strip() for n in names if n.strip()]
+
+
+def parse_tps(raw: str) -> dict:
+    # Paper: "TPS from last 1m, 5m, 15m: 20.0, 20.0, 20.0" (newer builds
+    # prepend a 5s figure) — take the last three floats after the last colon.
+    cleaned = strip_colors(raw).strip()
+    if ":" in cleaned:
+        floats = re.findall(r"\d+(?:\.\d+)?", cleaned.rsplit(":", 1)[1])
+        if len(floats) >= 3:
+            one, five, fifteen = (float(f) for f in floats[-3:])
+            return {"tps_1m": one, "tps_5m": five, "tps_15m": fifteen, "raw": cleaned}
+    return {"raw": cleaned}
+
+
+def tail_lines(path: Path, count: int) -> list[str]:
+    count = max(1, min(count, MAX_LOG_LINES))
+    with path.open(errors="replace") as f:
+        return [line.rstrip("\n") for line in deque(f, maxlen=count)]
+
+
+# ---------------------------------------------------------------- auth & errors
+
+
+@app.middleware("http")
+async def basic_auth(request: Request, call_next):
+    user, password = _env("DASH_USER"), _env("DASH_PASS")
+    if user and password and request.url.path != "/healthz":
+        supplied = request.headers.get("authorization", "")
+        ok = False
+        if supplied.startswith("Basic "):
+            try:
+                got_user, _, got_pass = base64.b64decode(supplied[6:]).decode().partition(":")
+                user_ok = secrets.compare_digest(got_user, user)
+                pass_ok = secrets.compare_digest(got_pass, password)
+                ok = user_ok and pass_ok
+            except Exception:
+                ok = False
+        if not ok:
+            return Response(
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="command-block"'},
+            )
+    return await call_next(request)
+
+
+@app.exception_handler(RconError)
+async def rcon_error_handler(request: Request, exc: RconError):
+    return JSONResponse(status_code=502, content={"error": str(exc)})
+
+
+def _bad_request(message: str) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"error": message})
+
+
+# ---------------------------------------------------------------- models
+
+
+class WhitelistChange(BaseModel):
+    action: Literal["add", "remove"]
+    name: str
+
+
+class NameReason(BaseModel):
+    name: str
+    reason: str | None = None
+
+
+class NameOnly(BaseModel):
+    name: str
+
+
+class Broadcast(BaseModel):
+    message: str
+
+
+class Command(BaseModel):
+    command: str
+
+
+# ---------------------------------------------------------------- endpoints
+
+
+@app.get("/healthz")
+async def healthz():
+    return {"ok": True}
+
+
+@app.get("/api/status")
+async def status():
+    host = _env("RCON_HOST", "minecraft")
+    try:
+        s = await JavaServer(host, PING_PORT, timeout=3).async_status(tries=1)
+        return {
+            "online": True,
+            "version": s.version.name,
+            "players_online": s.players.online,
+            "players_max": s.players.max,
+            "motd": s.motd.to_plain().strip(),
+            "latency_ms": round(s.latency, 1),
+        }
+    except Exception:
+        return {"online": False}
+
+
+@app.get("/api/players")
+async def players():
+    return parse_list(await rcon_command("list"))
+
+
+@app.get("/api/whitelist")
+async def whitelist():
+    raw = await rcon_command("whitelist list")
+    return {"players": parse_whitelist(raw), "raw": raw}
+
+
+@app.post("/api/whitelist")
+async def whitelist_change(body: WhitelistChange):
+    if not _NAME_RE.match(body.name):
+        return _bad_request("Invalid player name (letters, digits, underscore; max 16).")
+    return {"raw": await rcon_command(f"whitelist {body.action} {body.name}")}
+
+
+@app.post("/api/kick")
+async def kick(body: NameReason):
+    if not _NAME_RE.match(body.name):
+        return _bad_request("Invalid player name (letters, digits, underscore; max 16).")
+    cmd = f"kick {body.name}"
+    if body.reason:
+        cmd += f" {body.reason.strip()}"
+    return {"raw": await rcon_command(cmd)}
+
+
+@app.post("/api/ban")
+async def ban(body: NameReason):
+    if not _NAME_RE.match(body.name):
+        return _bad_request("Invalid player name (letters, digits, underscore; max 16).")
+    cmd = f"ban {body.name}"
+    if body.reason:
+        cmd += f" {body.reason.strip()}"
+    return {"raw": await rcon_command(cmd)}
+
+
+@app.post("/api/pardon")
+async def pardon(body: NameOnly):
+    if not _NAME_RE.match(body.name):
+        return _bad_request("Invalid player name (letters, digits, underscore; max 16).")
+    return {"raw": await rcon_command(f"pardon {body.name}")}
+
+
+@app.post("/api/broadcast")
+async def broadcast(body: Broadcast):
+    message = " ".join(body.message.split())
+    if not message:
+        return _bad_request("Empty message.")
+    return {"raw": await rcon_command(f"say {message}")}
+
+
+@app.post("/api/save")
+async def save():
+    return {"raw": await rcon_command("save-all flush")}
+
+
+@app.post("/api/command")
+async def command(body: Command):
+    cmd = body.command.strip().lstrip("/")
+    if not cmd:
+        return _bad_request("Empty command.")
+    return {"raw": await rcon_command(cmd)}
+
+
+@app.post("/api/restart")
+async def restart():
+    # `stop` saves the world and exits; Docker's unless-stopped policy brings
+    # the server back. The connection dropping mid-command is success here.
+    raw = await rcon_command("stop", expect_disconnect=True)
+    return {"restarting": True, "raw": raw}
+
+
+@app.get("/api/logs")
+async def logs(lines: int = Query(100, ge=1)):
+    path = _log_file()
+    try:
+        return {"lines": tail_lines(path, lines)}
+    except OSError:
+        return {"lines": [], "error": f"Log file not readable at {path}."}
+
+
+@app.get("/api/tps")
+async def tps():
+    return parse_tps(await rcon_command("tps"))
+
+
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

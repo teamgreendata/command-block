@@ -1,0 +1,4 @@
+fastapi==0.141.1
+uvicorn==0.52.1
+mcstatus==14.0.0
+aio-mc-rcon==3.4.2

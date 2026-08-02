@@ -1,0 +1,7 @@
+# local secrets — the real .env lives only on webnode
+.env
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
