@@ -1,0 +1,19 @@
+services:
+  command-block:
+    build: .
+    container_name: command-block
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "8300:8300"
+    env_file: .env
+    volumes:
+      - /opt/stacks/minecraft/data/logs:/mc-logs:ro
+    networks:
+      - mc_net
+
+networks:
+  mc_net:
+    external: true
+    name: minecraft_default

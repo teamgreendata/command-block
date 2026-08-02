@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>command-block</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='2' fill='%23c2691a'/%3E%3Crect x='4' y='4' width='8' height='8' rx='1' fill='%23e8a04b'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>command-block</h1>
+  <span id="msg" hidden></span>
+</header>
+<main>
+
+  <section class="panel" id="status-panel">
+    <h2>Server</h2>
+    <div class="status-row">
+      <span id="status-dot" class="dot"></span>
+      <span id="status-text">checking…</span>
+    </div>
+    <dl class="facts">
+      <dt>Players</dt><dd id="st-players">–</dd>
+      <dt>Version</dt><dd id="st-version">–</dd>
+      <dt>MOTD</dt><dd id="st-motd">–</dd>
+      <dt>Latency</dt><dd id="st-latency">–</dd>
+      <dt>TPS</dt><dd id="st-tps">–</dd>
+    </dl>
+    <div class="actions">
+      <button id="btn-save" type="button">Save world</button>
+      <button id="btn-restart" type="button" class="danger">Restart</button>
+    </div>
+  </section>
+
+  <section class="panel" id="players-panel">
+    <h2>Players &amp; whitelist</h2>
+    <h3>Online</h3>
+    <ul id="online-list" class="rows"><li class="empty">–</li></ul>
+    <h3>Whitelist</h3>
+    <ul id="whitelist-list" class="rows"><li class="empty">–</li></ul>
+    <form id="whitelist-form" autocomplete="off">
+      <input id="whitelist-name" placeholder="player name" maxlength="16">
+      <button>Add</button>
+    </form>
+    <h3>Broadcast</h3>
+    <form id="broadcast-form" autocomplete="off">
+      <input id="broadcast-msg" placeholder="message to everyone online">
+      <button>Say</button>
+    </form>
+  </section>
+
+  <section class="panel" id="console-panel">
+    <h2>Console</h2>
+    <pre id="console-out" class="scrollback"></pre>
+    <form id="console-form" autocomplete="off">
+      <span class="prompt">/</span>
+      <input id="console-in" spellcheck="false" placeholder="command (up-arrow for history)">
+      <button>Send</button>
+    </form>
+  </section>
+
+  <section class="panel" id="logs-panel">
+    <h2>Logs
+      <span class="h2-tools">
+        <label><input type="checkbox" id="logs-auto"> auto</label>
+        <button id="logs-refresh" type="button">refresh</button>
+      </span>
+    </h2>
+    <pre id="logs-out" class="scrollback"></pre>
+  </section>
+
+</main>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+:root {
+  --bg: #101418;
+  --panel: #171d23;
+  --border: #2a323b;
+  --text: #d5dde4;
+  --dim: #8b959f;
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+  --accent: #e8a04b;
+  --mono: ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+  font-size: 15px;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.7rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+header h1 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-family: var(--mono);
+  color: var(--accent);
+}
+#msg { font-size: 0.85rem; color: var(--dim); }
+#msg.error { color: var(--red); }
+
+main {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+@media (max-width: 750px) { main { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.9rem 1.1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 260px;
+}
+.panel h2 {
+  margin: 0 0 0.7rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.panel h3 {
+  margin: 0.8rem 0 0.3rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+}
+.h2-tools { display: flex; gap: 0.6rem; align-items: center; font-size: 0.75rem; text-transform: none; letter-spacing: 0; }
+
+.status-row { display: flex; align-items: center; gap: 0.55rem; font-size: 1.15rem; }
+.dot {
+  width: 0.8rem; height: 0.8rem; border-radius: 50%;
+  background: var(--dim); flex: none;
+}
+.dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.dot.offline { background: var(--red); }
+.dot.restarting { background: var(--amber); animation: pulse 1s infinite alternate; }
+@keyframes pulse { from { opacity: 1; } to { opacity: 0.35; } }
+
+dl.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0.9rem 0 0;
+}
+dl.facts dt { color: var(--dim); }
+dl.facts dd { margin: 0; font-family: var(--mono); font-size: 0.9rem; overflow-wrap: anywhere; }
+
+.actions { margin-top: auto; padding-top: 1rem; display: flex; gap: 0.6rem; }
+
+button {
+  background: #222a33;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+button:hover { border-color: var(--dim); }
+button:disabled { opacity: 0.45; cursor: default; }
+button.danger { border-color: #7f1d1d; color: var(--red); }
+button.danger:hover { background: #7f1d1d22; }
+button.small { padding: 0.1rem 0.5rem; font-size: 0.75rem; }
+
+ul.rows { list-style: none; margin: 0; padding: 0; }
+ul.rows li {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.25rem 0;
+  font-family: var(--mono); font-size: 0.9rem;
+}
+ul.rows li .name { flex: 1; overflow-wrap: anywhere; }
+ul.rows li.empty { color: var(--dim); font-family: system-ui, sans-serif; }
+
+form { display: flex; gap: 0.5rem; margin-top: 0.4rem; align-items: center; }
+input[type="text"], input:not([type]) {
+  flex: 1;
+  background: #0c1013;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  min-width: 0;
+}
+input:focus { outline: none; border-color: var(--accent); }
+label { color: var(--dim); font-size: 0.8rem; user-select: none; }
+
+.scrollback {
+  flex: 1;
+  margin: 0;
+  padding: 0.6rem;
+  background: #0c1013;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-height: 10rem;
+  max-height: 24rem;
+}
+#console-panel .prompt { color: var(--accent); font-family: var(--mono); }
+#console-out .cmd { color: var(--accent); }
+#console-out .err { color: var(--red); }
