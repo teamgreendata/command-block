@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { QUICK_COMMANDS, PRESETS, findCommand, buildQuick } from '../app/static/quick-commands.js';
+import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick } from '../app/static/quick-commands.js';
 
 const cases = [
   ['gamemode', { mode: 'creative', player: 'alice' }, 'gamemode creative alice'],
@@ -57,6 +57,21 @@ test('all 13 commands are well-formed', () => {
     assert.ok(c.name && c.label && c.desc, c.name);
     assert.ok(Array.isArray(c.fields) && c.fields.length > 0, c.name);
     assert.equal(typeof c.build, 'function', c.name);
+  }
+});
+
+test('every suggestion entry pairs an exact id with a friendly label', () => {
+  for (const [key, list] of Object.entries(SUGGESTIONS)) {
+    assert.ok(list.length > 0, key);
+    for (const e of list) assert.ok(e.id && e.label, `${key}: ${JSON.stringify(e)}`);
+  }
+});
+
+test('choice fields reference real suggestion lists', () => {
+  for (const c of QUICK_COMMANDS) {
+    for (const f of c.fields) {
+      if (f.type === 'choice') assert.ok(Array.isArray(SUGGESTIONS[f.choices]), `${c.name}.${f.key}`);
+    }
   }
 });
 

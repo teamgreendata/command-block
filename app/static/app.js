@@ -288,6 +288,8 @@ function updatePlayerDatalist(names) {
   ensureDatalist('dl-players', names); // online players only — selectors can be typed
 }
 
+const CUSTOM = '__custom__';
+
 function renderQuickFields(cmd) {
   const wrap = $('#quick-fields');
   wrap.replaceChildren();
@@ -297,28 +299,56 @@ function renderQuickFields(cmd) {
     const label = document.createElement('label');
     label.textContent = f.required ? `${f.label} *` : f.label;
     div.appendChild(label);
-    let input;
-    if (f.type === 'select') {
-      input = document.createElement('select');
-      for (const opt of f.options) {
-        const o = document.createElement('option');
-        o.value = o.textContent = opt;
-        input.appendChild(o);
+    if (f.type === 'select' || f.type === 'choice') {
+      const sel = document.createElement('select');
+      if (f.type === 'choice') {
+        // friendly labels, exact-id values, plus a Custom escape hatch
+        const blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = f.required ? 'choose…' : '—';
+        sel.appendChild(blank);
+        for (const c of SUGGESTIONS[f.choices]) {
+          const o = document.createElement('option');
+          o.value = c.id;
+          o.textContent = c.label;
+          sel.appendChild(o);
+        }
+        const custom = document.createElement('option');
+        custom.value = CUSTOM;
+        custom.textContent = 'Custom…';
+        sel.appendChild(custom);
+      } else {
+        for (const opt of f.options) {
+          const o = document.createElement('option');
+          o.value = o.textContent = opt;
+          sel.appendChild(o);
+        }
+      }
+      sel.dataset.key = f.key;
+      div.appendChild(sel);
+      if (f.type === 'choice') {
+        const customInput = document.createElement('input');
+        customInput.type = 'text';
+        customInput.spellcheck = false;
+        customInput.placeholder = f.placeholder || 'exact id';
+        customInput.hidden = true;
+        customInput.dataset.customFor = f.key;
+        sel.addEventListener('change', () => {
+          customInput.hidden = sel.value !== CUSTOM;
+          if (!customInput.hidden) customInput.focus();
+        });
+        div.appendChild(customInput);
       }
     } else {
-      input = document.createElement('input');
+      const input = document.createElement('input');
       input.type = 'text'; // stays text even for numbers: ticks/selectors are fine
       input.spellcheck = false;
       if (f.type === 'number') input.inputMode = 'numeric';
       if (f.type === 'player') input.setAttribute('list', 'dl-players');
-      else if (f.suggest) {
-        ensureDatalist(`dl-${f.suggest}`, SUGGESTIONS[f.suggest]);
-        input.setAttribute('list', `dl-${f.suggest}`);
-      }
       if (f.placeholder) input.placeholder = f.placeholder;
+      input.dataset.key = f.key;
+      div.appendChild(input);
     }
-    input.dataset.key = f.key;
-    div.appendChild(input);
     wrap.appendChild(div);
   }
   $('#quick-desc').textContent = cmd.desc;
@@ -337,8 +367,13 @@ $('#quick-form').addEventListener('submit', e => {
   e.preventDefault();
   const cmd = findCommand(quickSelect.value);
   const values = {};
-  for (const input of $('#quick-fields').querySelectorAll('[data-key]')) {
-    values[input.dataset.key] = input.value;
+  for (const el of $('#quick-fields').querySelectorAll('[data-key]')) {
+    let v = el.value;
+    if (v === CUSTOM) {
+      const custom = $('#quick-fields').querySelector(`[data-custom-for="${el.dataset.key}"]`);
+      v = custom ? custom.value : '';
+    }
+    values[el.dataset.key] = v;
   }
   const built = buildQuick(cmd, values);
   if (built.error) { flash(built.error, true); return; }
