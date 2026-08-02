@@ -7,7 +7,6 @@
 // coordinates or `execute at <player> run summon … ~ ~ ~`.
 
 export const SUGGESTIONS = {
-  players: ['@a', '@r', '@e[type=!player]'],
   items: [
     'minecraft:diamond', 'minecraft:iron_pickaxe', 'minecraft:diamond_pickaxe',
     'minecraft:diamond_sword', 'minecraft:netherite_ingot', 'minecraft:golden_apple',

@@ -285,7 +285,7 @@ function ensureDatalist(id, values) {
 }
 
 function updatePlayerDatalist(names) {
-  ensureDatalist('dl-players', [...names, ...SUGGESTIONS.players]);
+  ensureDatalist('dl-players', names); // online players only — selectors can be typed
 }
 
 function renderQuickFields(cmd) {
