@@ -41,13 +41,19 @@ path (`/mc-logs/latest.log` in-container) — used by tests and local runs only.
 
 ## Gotchas & conventions
 
-- **The plan doc says "webnode"; the box is `teamgreenserver`.** Same machine as far as
-  this stack is concerned — the minecraft stack, Dockge, Homepage, Uptime Kuma, and
-  Vaultwarden all live on it.
+- **Developed on the K12, deployed on webnode.** This repo lives on `teamgreenserver`
+  (the K12, 10.0.0.60 — the Claude Code host), but the Minecraft server lives on
+  **`webnode` (10.0.0.64)** since the 2026-07 migration, and that's where this stack
+  deploys (build plan Part F). There is deliberately **no K12→webnode SSH trust**
+  (lateral-movement containment) — deployment is manual, over SSH from the user's own
+  devices.
+- ⚠️ The K12 still holds a **stale soak-period copy** of the minecraft stack at
+  `/opt/stacks/minecraft` — never start it (divergent worlds), and never point a local
+  run of command-block at it. E2E-test against a throwaway server instead (see below).
 - `compose.yaml` joins the **external** network `minecraft_default` — compose errors at
   `up` if the minecraft stack has never been started on the host.
-- After a manual `docker compose stop` of the minecraft stack, the restart button can't
-  bring the server back (Docker's manual-stop flag persists) — that needs
+- After a manual `docker compose stop` of the minecraft stack (on webnode), the restart
+  button can't bring the server back (Docker's manual-stop flag persists) — that needs
   `cd /opt/stacks/minecraft && docker compose up -d` once.
 - RCON responses carry `§` color codes — `strip_colors()` before parsing; `/api/tps`
   falls back to the raw string rather than erroring when Paper changes the format.
