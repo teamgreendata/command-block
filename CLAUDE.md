@@ -30,7 +30,8 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # 34 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 34 tests, no network, no MC server
+node --test                                   # frontend command builders: 27 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
 ```
@@ -64,7 +65,16 @@ path (`/mc-logs/latest.log` in-container) — used by tests and local runs only.
 - The RCON password lives in two `.env` files (minecraft's and this one's) — one
   Vaultwarden entry covers both.
 - Frontend is deliberately framework-free with zero external requests (the favicon is an
-  inline data URI). Keep it that way.
+  inline data URI). Keep it that way. It's ES modules now (`app.js` imports
+  `quick-commands.js`) — keep new frontend logic that builds strings DOM-free in
+  `quick-commands.js` so `node --test` can cover it.
+- **RCON has no executor** (no position, no "self") — that's why the quick panel makes
+  clear/kill/gamemode targets required and summon goes through
+  `execute at <player> run summon … ~ ~ ~` or explicit coords.
+- **This MC generation renamed all gamerules to snake_case** (doDaylightCycle →
+  `advance_time`, doMobSpawning → `spawn_mobs`, keepInventory → `keep_inventory`…).
+  The full registry lives in the server jar's `GameRules.class`; the curated list in
+  `quick-commands.js` was extracted from there and verified over RCON on Paper 26.2.
 
 ## Verified behavior (2026-08-02, local E2E vs a throwaway Paper 26.2)
 

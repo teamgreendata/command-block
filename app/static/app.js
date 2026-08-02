@@ -1,4 +1,4 @@
-'use strict';
+import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick } from './quick-commands.js';
 
 const $ = s => document.querySelector(s);
 const stripCodes = s => String(s).replace(/§./g, '');
@@ -113,6 +113,7 @@ async function refreshPlayers() {
   const ul = $('#online-list');
   try {
     const p = await api('/api/players');
+    updatePlayerDatalist(p.players);
     fillList(ul, p.players.map(name => row(name, [
       ['kick', 'small', () => kick(name)],
       ['ban', 'small danger', () => ban(name)],
@@ -226,25 +227,34 @@ function consoleLine(cmd, response, isError) {
   out.scrollTop = out.scrollHeight;
 }
 
-$('#console-form').addEventListener('submit', async e => {
+// Single send path for the console and the quick panel: history, confirm,
+// API call, scrollback.
+async function sendRaw(command, confirmText) {
+  if (confirmText && !confirm(confirmText)) return;
+  history.push(command);
+  histIdx = history.length;
+  try {
+    const r = await api('/api/command', { command });
+    consoleLine(command, stripCodes(r.raw));
+  } catch (err) {
+    consoleLine(command, err.message, true);
+  }
+}
+
+$('#console-form').addEventListener('submit', e => {
   e.preventDefault();
   const input = $('#console-in');
   const cmd = input.value.trim();
   if (!cmd) return;
-  history.push(cmd);
-  histIdx = history.length;
   input.value = '';
   if (cmd.replace(/^\//, '') === 'stop') {
     // stop IS the restart button — same confirm, same flow
+    history.push(cmd);
+    histIdx = history.length;
     doRestart();
     return;
   }
-  try {
-    const r = await api('/api/command', { command: cmd });
-    consoleLine(cmd, stripCodes(r.raw));
-  } catch (err) {
-    consoleLine(cmd, err.message, true);
-  }
+  sendRaw(cmd);
 });
 
 $('#console-in').addEventListener('keydown', e => {
@@ -257,6 +267,92 @@ $('#console-in').addEventListener('keydown', e => {
     e.preventDefault();
   }
 });
+
+// ---------------------------------------------------------------- quick commands
+
+function ensureDatalist(id, values) {
+  let dl = document.getElementById(id);
+  if (!dl) {
+    dl = document.createElement('datalist');
+    dl.id = id;
+    document.body.appendChild(dl);
+  }
+  dl.replaceChildren(...values.map(v => {
+    const o = document.createElement('option');
+    o.value = v;
+    return o;
+  }));
+}
+
+function updatePlayerDatalist(names) {
+  ensureDatalist('dl-players', [...names, ...SUGGESTIONS.players]);
+}
+
+function renderQuickFields(cmd) {
+  const wrap = $('#quick-fields');
+  wrap.replaceChildren();
+  for (const f of cmd.fields) {
+    const div = document.createElement('div');
+    div.className = 'qf';
+    const label = document.createElement('label');
+    label.textContent = f.required ? `${f.label} *` : f.label;
+    div.appendChild(label);
+    let input;
+    if (f.type === 'select') {
+      input = document.createElement('select');
+      for (const opt of f.options) {
+        const o = document.createElement('option');
+        o.value = o.textContent = opt;
+        input.appendChild(o);
+      }
+    } else {
+      input = document.createElement('input');
+      input.type = 'text'; // stays text even for numbers: ticks/selectors are fine
+      input.spellcheck = false;
+      if (f.type === 'number') input.inputMode = 'numeric';
+      if (f.type === 'player') input.setAttribute('list', 'dl-players');
+      else if (f.suggest) {
+        ensureDatalist(`dl-${f.suggest}`, SUGGESTIONS[f.suggest]);
+        input.setAttribute('list', `dl-${f.suggest}`);
+      }
+      if (f.placeholder) input.placeholder = f.placeholder;
+    }
+    input.dataset.key = f.key;
+    div.appendChild(input);
+    wrap.appendChild(div);
+  }
+  $('#quick-desc').textContent = cmd.desc;
+}
+
+const quickSelect = $('#quick-cmd');
+for (const c of QUICK_COMMANDS) {
+  const o = document.createElement('option');
+  o.value = c.name;
+  o.textContent = c.label;
+  quickSelect.appendChild(o);
+}
+quickSelect.addEventListener('change', () => renderQuickFields(findCommand(quickSelect.value)));
+
+$('#quick-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const cmd = findCommand(quickSelect.value);
+  const values = {};
+  for (const input of $('#quick-fields').querySelectorAll('[data-key]')) {
+    values[input.dataset.key] = input.value;
+  }
+  const built = buildQuick(cmd, values);
+  if (built.error) { flash(built.error, true); return; }
+  sendRaw(built.command, cmd.confirm ? cmd.confirm(built.args) : null);
+});
+
+for (const p of PRESETS) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'small';
+  b.textContent = p.label;
+  b.addEventListener('click', () => sendRaw(p.command, p.confirm));
+  $('#preset-row').appendChild(b);
+}
 
 // ---------------------------------------------------------------- logs
 
@@ -277,6 +373,8 @@ $('#logs-auto').addEventListener('change', e => {
 
 // ---------------------------------------------------------------- boot
 
+updatePlayerDatalist([]);
+renderQuickFields(QUICK_COMMANDS[0]);
 refreshStatus();
 refreshWhitelist();
 refreshLogs();

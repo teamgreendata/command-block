@@ -1,9 +1,11 @@
 # command-block
 
 A small self-hosted admin dashboard for the Minecraft server stack — live status,
-browser RCON console, player/whitelist management, log tail, and a graceful restart
-button. FastAPI + vanilla JS, one container, deliberately **no Docker socket**: the
-entire admin surface is RCON plus a read-only log mount.
+browser RCON console, quick commands (gamemode, give, tp, time, weather, gamerules,
+effects, summon and friends with syntax-aware forms and one-click presets),
+player/whitelist management, log tail, and a graceful restart button. FastAPI +
+vanilla JS, one container, deliberately **no Docker socket**: the entire admin
+surface is RCON plus a read-only log mount.
 
 Named for the in-game block whose entire job is executing console commands.
 

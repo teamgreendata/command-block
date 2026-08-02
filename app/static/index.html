@@ -50,6 +50,19 @@
     </form>
   </section>
 
+  <section class="panel" id="quick-panel">
+    <h2>Quick commands</h2>
+    <div id="preset-row" class="preset-row"></div>
+    <form id="quick-form" autocomplete="off">
+      <div class="quick-top">
+        <select id="quick-cmd"></select>
+        <button>Send</button>
+      </div>
+      <div id="quick-fields" class="quick-fields"></div>
+      <p id="quick-desc" class="quick-desc"></p>
+    </form>
+  </section>
+
   <section class="panel" id="console-panel">
     <h2>Console</h2>
     <pre id="console-out" class="scrollback"></pre>
@@ -71,6 +84,6 @@
   </section>
 
 </main>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
