@@ -7,7 +7,10 @@ player/whitelist management, log tail, and a graceful restart button. FastAPI +
 vanilla JS, one container, deliberately **no Docker socket**: the entire admin
 surface is RCON plus a read-only log mount.
 
-Named for the in-game block whose entire job is executing console commands.
+Named for the in-game block whose entire job is executing console commands — and
+styled to match: the UI is a Minecraft-GUI theme (dirt background, inventory-gray
+beveled panels, stone buttons) using the vendored [Monocraft](https://github.com/IdreesInc/Monocraft)
+pixel font (SIL OFL 1.1). Still zero external requests at runtime.
 
 ## How it works
 

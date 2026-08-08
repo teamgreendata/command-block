@@ -1,150 +1,193 @@
+/* Minecraft-GUI theme: dirt menu background, inventory-gray beveled panels,
+   stone buttons, black edit boxes. Monocraft is vendored (SIL OFL 1.1, see
+   monocraft-license.txt); the dirt tile is a generated 16x16 data-URI PNG —
+   zero external requests, same as always. */
+
+@font-face {
+  font-family: "Monocraft";
+  src: url("monocraft.ttf") format("truetype");
+  font-display: swap;
+}
+
 :root {
-  --bg: #101418;
-  --panel: #171d23;
-  --border: #2a323b;
-  --text: #d5dde4;
-  --dim: #8b959f;
-  --green: #4ade80;
-  --red: #f87171;
-  --amber: #fbbf24;
-  --accent: #e8a04b;
-  --mono: ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --panel: #c6c6c6;        /* inventory gray */
+  --bevel-light: #ffffff;
+  --bevel-dark: #555555;
+  --ink: #3f3f3f;          /* MC inventory label gray */
+  --dim: #5f5f5f;
+  --green: #55ff55;        /* MC chat colors */
+  --red: #ff5555;
+  --gold: #ffaa00;
+  --accent: #c2691a;       /* command-block orange */
+  --pixel: "Monocraft", "Courier New", monospace;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, sans-serif;
-  font-size: 15px;
+  /* darkened tiled dirt, like the pause/options screens */
+  background-color: #201510;
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.62)),
+    url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAA20lEQVR42mWSuw3CQBBEtx5Ch0RIzpw7IyAkoAFLxJTgFmiTOb3T02FLJ7P/mdmlnsu0rdfPY77fLhh+k9pfy/e9xiWSV6STy6OHxyDHpZO2ImQ0Bl/Ga1MWtzWAQFtARKdUPuHWKOFLOg0HHPE7pSRSpOIYsmc8DX8agsU8KB30uDfsko+lbkaS1jTROFSzGfTBkztAj1TFJ81XiSMaszslFzwqGyvkhlGWepBxUYmwfpaZSPGD77IpghUaENZEu3JAZEgnEe/dD6es8/9KKEGKYR5bJRzUIMzzfoDMEtgiKH/fAAAAAElFTkSuQmCC");
+  background-size: auto, 64px 64px;
+  background-repeat: repeat;
+  image-rendering: pixelated;
+  color: var(--ink);
+  font-family: var(--pixel);
+  font-size: 14px;
 }
 
 header {
   display: flex;
   align-items: baseline;
   gap: 1rem;
-  padding: 0.7rem 1.2rem;
-  border-bottom: 1px solid var(--border);
+  padding: 0.8rem 1.2rem 0.5rem;
 }
 header h1 {
   margin: 0;
-  font-size: 1.1rem;
-  font-family: var(--mono);
-  color: var(--accent);
+  font-size: 1.3rem;
+  font-weight: normal;
+  color: #fff;
+  text-shadow: 2px 2px 0 #3f3f3f;
 }
-#msg { font-size: 0.85rem; color: var(--dim); }
+header h1::before {
+  content: "";
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-right: 0.55rem;
+  vertical-align: -3px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%237a3f10'/%3E%3Crect x='1' y='1' width='14' height='14' fill='%23c2691a'/%3E%3Crect x='3' y='3' width='4' height='4' fill='%23e8a04b'/%3E%3Crect x='9' y='3' width='4' height='4' fill='%23e8a04b'/%3E%3Crect x='3' y='9' width='4' height='4' fill='%23e8a04b'/%3E%3Crect x='9' y='9' width='4' height='4' fill='%23e8a04b'/%3E%3C/svg%3E") center / contain no-repeat;
+  image-rendering: pixelated;
+}
+#msg { font-size: 0.85rem; color: #fff; text-shadow: 2px 2px 0 #3f3f3f; }
 #msg.error { color: var(--red); }
 
 main {
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
   gap: 1rem;
-  padding: 1rem 1.2rem;
+  padding: 0.6rem 1.2rem 1.2rem;
   max-width: 1200px;
   margin: 0 auto;
 }
 @media (max-width: 750px) { main { grid-template-columns: 1fr; } }
 
+/* Inventory-window panel: black outline, light top-left bevel, dark bottom-right */
 .panel {
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.9rem 1.1rem 1.1rem;
+  border: 2px solid #000;
+  box-shadow: inset 3px 3px 0 var(--bevel-light), inset -3px -3px 0 var(--bevel-dark);
+  padding: 1.1rem 1.25rem 1.25rem;
   display: flex;
   flex-direction: column;
   min-height: 260px;
 }
 .panel h2 {
   margin: 0 0 0.7rem;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--dim);
+  font-size: 0.95rem;
+  font-weight: normal;
+  color: var(--ink);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 .panel h3 {
   margin: 0.8rem 0 0.3rem;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 0.8rem;
+  font-weight: normal;
   color: var(--dim);
 }
-.h2-tools { display: flex; gap: 0.6rem; align-items: center; font-size: 0.75rem; text-transform: none; letter-spacing: 0; }
+.h2-tools { display: flex; gap: 0.6rem; align-items: center; font-size: 0.75rem; }
 
-.status-row { display: flex; align-items: center; gap: 0.55rem; font-size: 1.15rem; }
+.status-row { display: flex; align-items: center; gap: 0.55rem; font-size: 1.05rem; }
 .dot {
-  width: 0.8rem; height: 0.8rem; border-radius: 50%;
-  background: var(--dim); flex: none;
+  width: 0.8rem; height: 0.8rem;
+  border: 2px solid #000;
+  background: #8b8b8b; flex: none;
 }
-.dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.dot.online { background: var(--green); }
 .dot.offline { background: var(--red); }
-.dot.restarting { background: var(--amber); animation: pulse 1s infinite alternate; }
+.dot.restarting { background: var(--gold); animation: pulse 1s infinite alternate; }
 @keyframes pulse { from { opacity: 1; } to { opacity: 0.35; } }
 
 dl.facts {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0.25rem 1rem;
+  gap: 0.3rem 1rem;
   margin: 0.9rem 0 0;
 }
 dl.facts dt { color: var(--dim); }
-dl.facts dd { margin: 0; font-family: var(--mono); font-size: 0.9rem; overflow-wrap: anywhere; }
+dl.facts dd { margin: 0; font-size: 0.88rem; overflow-wrap: anywhere; }
 
 .actions { margin-top: auto; padding-top: 1rem; display: flex; gap: 0.6rem; }
 
+/* The classic stone button */
 button {
-  background: #222a33;
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.35rem 0.8rem;
-  font-size: 0.85rem;
+  font-family: var(--pixel);
+  background: #707070;
+  color: #fff;
+  border: 2px solid #000;
+  box-shadow: inset 2px 2px 0 #a5a5a5, inset -2px -2px 0 #4c4c4c;
+  text-shadow: 2px 2px 0 #3f3f3f;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
   cursor: pointer;
 }
-button:hover { border-color: var(--dim); }
-button:disabled { opacity: 0.45; cursor: default; }
-button.danger { border-color: #7f1d1d; color: var(--red); }
-button.danger:hover { background: #7f1d1d22; }
-button.small { padding: 0.1rem 0.5rem; font-size: 0.75rem; }
+button:hover:not(:disabled) { border-color: #fff; }
+button:active:not(:disabled) { box-shadow: inset 2px 2px 0 #4c4c4c, inset -2px -2px 0 #a5a5a5; }
+button:disabled {
+  background: #4f4f4f;
+  color: #a0a0a0;
+  text-shadow: none;
+  box-shadow: none;
+  cursor: default;
+}
+button.danger {
+  background: #8f3838;
+  box-shadow: inset 2px 2px 0 #b96a6a, inset -2px -2px 0 #5a2020;
+  text-shadow: 2px 2px 0 #4c1a1a;
+}
+button.small { padding: 0.15rem 0.5rem; font-size: 0.72rem; }
 
 ul.rows { list-style: none; margin: 0; padding: 0; }
 ul.rows li {
   display: flex; align-items: center; gap: 0.6rem;
   padding: 0.25rem 0;
-  font-family: var(--mono); font-size: 0.9rem;
+  font-size: 0.88rem;
 }
 ul.rows li .name { flex: 1; overflow-wrap: anywhere; }
-ul.rows li.empty { color: var(--dim); font-family: system-ui, sans-serif; }
+ul.rows li.empty { color: var(--dim); }
 
 form { display: flex; gap: 0.5rem; margin-top: 0.4rem; align-items: center; }
+
+/* MC edit box: black with a gray frame */
 input[type="text"], input:not([type]) {
   flex: 1;
-  background: #0c1013;
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.4rem 0.6rem;
-  font-family: var(--mono);
-  font-size: 0.9rem;
+  background: #000;
+  color: #e8e8e8;
+  border: 2px solid #a0a0a0;
+  padding: 0.4rem 0.55rem;
+  font-family: var(--pixel);
+  font-size: 0.85rem;
   min-width: 0;
 }
-input:focus { outline: none; border-color: var(--accent); }
+input::placeholder { color: #707070; }
+input:focus { outline: none; border-color: #fff; }
 label { color: var(--dim); font-size: 0.8rem; user-select: none; }
+input[type="checkbox"] { accent-color: #707070; }
 
 select {
-  background: #0c1013;
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.4rem 0.6rem;
-  font-family: var(--mono);
-  font-size: 0.9rem;
+  background: #000;
+  color: #e8e8e8;
+  border: 2px solid #a0a0a0;
+  padding: 0.4rem 0.55rem;
+  font-family: var(--pixel);
+  font-size: 0.85rem;
 }
-select:focus { outline: none; border-color: var(--accent); }
+select:focus { outline: none; border-color: #fff; }
 
 .preset-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.7rem; }
 #quick-form { flex-direction: column; align-items: stretch; gap: 0.6rem; }
@@ -152,26 +195,31 @@ select:focus { outline: none; border-color: var(--accent); }
 .quick-top select { flex: 1; min-width: 0; }
 .quick-fields { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .qf { display: flex; flex-direction: column; gap: 0.2rem; flex: 1 1 8.5rem; min-width: 0; }
-.qf label { font-size: 0.7rem; }
+.qf label { font-size: 0.7rem; color: var(--ink); }
 .quick-desc { margin: 0; color: var(--dim); font-size: 0.78rem; }
 #logs-panel { grid-column: 1 / -1; }
 
+/* Chat-window scrollback: white text on black, gold for sent commands */
 .scrollback {
   flex: 1;
   margin: 0;
   padding: 0.6rem;
-  background: #0c1013;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-family: var(--mono);
+  background: #000;
+  color: #e8e8e8;
+  border: 2px solid #555;
+  font-family: var(--pixel);
   font-size: 0.78rem;
-  line-height: 1.45;
+  line-height: 1.5;
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   min-height: 10rem;
   max-height: 24rem;
+  scrollbar-color: #c6c6c6 #000;
 }
-#console-panel .prompt { color: var(--accent); font-family: var(--mono); }
-#console-out .cmd { color: var(--accent); }
+.scrollback::-webkit-scrollbar { width: 12px; }
+.scrollback::-webkit-scrollbar-track { background: #000; }
+.scrollback::-webkit-scrollbar-thumb { background: #c6c6c6; border: 2px solid #000; }
+#console-panel .prompt { color: var(--accent); font-size: 1rem; }
+#console-out .cmd { color: var(--gold); }
 #console-out .err { color: var(--red); }

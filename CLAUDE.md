@@ -31,7 +31,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/python -m pytest                    # backend: 34 tests, no network, no MC server
-node --test                                   # frontend command builders: 27 tests (bare, not `node --test tests/`)
+node --test                                   # frontend command builders: 29 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
 ```
@@ -64,10 +64,14 @@ path (`/mc-logs/latest.log` in-container) — used by tests and local runs only.
   commands — keep that gate on any new endpoint that takes a name.
 - The RCON password lives in two `.env` files (minecraft's and this one's) — one
   Vaultwarden entry covers both.
-- Frontend is deliberately framework-free with zero external requests (the favicon is an
-  inline data URI). Keep it that way. It's ES modules now (`app.js` imports
-  `quick-commands.js`) — keep new frontend logic that builds strings DOM-free in
-  `quick-commands.js` so `node --test` can cover it.
+- Frontend is deliberately framework-free with zero external requests: the favicon and
+  dirt-texture background are data URIs, and the Minecraft-style pixel font is **vendored**
+  (`app/static/monocraft.ttf`, Monocraft, SIL OFL 1.1 — license alongside). Keep it that
+  way. It's ES modules (`app.js` imports `quick-commands.js`) — keep new frontend logic
+  that builds strings DOM-free in `quick-commands.js` so `node --test` can cover it.
+- The UI is Minecraft-GUI themed by design (`style.css`): inventory-gray beveled panels,
+  stone buttons, black edit boxes, MC chat colors (`#55FF55`/`#FF5555`/`#FFAA00`) — stay
+  in that visual language for new UI.
 - **RCON has no executor** (no position, no "self") — that's why the quick panel makes
   clear/kill/gamemode targets required and summon goes through
   `execute at <player> run summon … ~ ~ ~` or explicit coords.
