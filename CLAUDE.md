@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 45 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 46 tests, no network, no MC server
 node --test                                   # frontend command builders: 31 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -78,11 +78,14 @@ template (set empty to disable avatar fetching).
   frontend swaps in a built-in pixel-face placeholder. Don't add other outbound calls
   without the same cache + kill-switch treatment.
 - `GET /api/playerstats` (cards' "Last seen"/"Played") reads the **read-only data-dir
-  mount** (`/mc-data`): `usercache.json` for name→UUID, the world's `stats/<uuid>.json`
-  play-time counter (72000 ticks = 1h; legacy `play_one_minute` key also handled), and
-  `playerdata/<uuid>.dat` mtime as last-seen. The world folder is auto-detected (wherever
-  `playerdata/` lives). These files only update on save/logout/autosave, so a currently
-  online player's hours lag a few minutes — the UI shows "now" for their last-seen.
+  mount** (`/mc-data`): `usercache.json` for name→UUID, the world's per-player stats
+  JSON play-time counter (72000 ticks = 1h; legacy `play_one_minute` key also handled),
+  and the player .dat mtime as last-seen. ⚠️ **This MC generation moved the files**:
+  `world/players/{stats,data}/` — the classic `world/{stats,playerdata}/` is also
+  supported, and the world folder name is auto-detected. These files only update on
+  save/logout/autosave, so a currently online player's hours lag a few minutes — the UI
+  shows "now" for their last-seen. Players absent from `usercache.json` (roughly a month
+  since last join) show no stats until they rejoin.
 - **Waypoints are the one piece of dashboard state**: `waypoints.json` in the `cb_data`
   named volume (`CB_DATA` overrides the dir for tests; the Dockerfile pre-creates
   `/cb-data` owned by `dash` so the volume inherits writable ownership). CRUD via

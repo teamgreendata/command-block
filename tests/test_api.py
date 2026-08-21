@@ -246,6 +246,24 @@ def test_playerstats_supports_legacy_play_time_key(client, mc_data):
     assert r.json()["players"]["bob"]["hours"] == 1.0
 
 
+def test_playerstats_modern_players_layout(client, tmp_path, monkeypatch):
+    # this MC generation nests everything under world/players/{data,stats}
+    # (verified against a live Paper 26.2 world) — the classic layout in the
+    # mc_data fixture is world/{playerdata,stats}
+    monkeypatch.setenv("MC_DATA", str(tmp_path))
+    players_dir = tmp_path / "world" / "players"
+    (players_dir / "data").mkdir(parents=True)
+    (players_dir / "stats").mkdir()
+    (tmp_path / "usercache.json").write_text(json.dumps([{"name": "alice", "uuid": UUID_A}]))
+    (players_dir / "stats" / f"{UUID_A}.json").write_text(json.dumps(
+        {"stats": {"minecraft:custom": {"minecraft:play_time": 36000}}}))  # half an hour
+    (players_dir / "data" / f"{UUID_A}.dat").write_bytes(b"")
+    r = client.get("/api/playerstats")
+    alice = r.json()["players"]["alice"]
+    assert alice["hours"] == 0.5
+    assert isinstance(alice["last_seen"], int)
+
+
 def test_playerstats_missing_mount_is_graceful(client, monkeypatch, tmp_path):
     monkeypatch.setenv("MC_DATA", str(tmp_path / "nope"))
     r = client.get("/api/playerstats")

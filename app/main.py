@@ -363,12 +363,16 @@ def _data_dir() -> Path:
     return Path(_env("MC_DATA", "/mc-data"))
 
 
-def _world_dir(data: Path) -> Path | None:
-    # the world folder is wherever playerdata/ lives (level-name varies)
+def _player_dirs(data: Path) -> tuple[Path, Path] | None:
+    """(stats_dir, playerdata_dir) — the world folder name varies, and this MC
+    generation moved the files: world/players/{stats,data} instead of the
+    classic world/{stats,playerdata}. Support both."""
     try:
         for d in sorted(data.iterdir()):
+            if (d / "players").is_dir():
+                return d / "players" / "stats", d / "players" / "data"
             if (d / "playerdata").is_dir():
-                return d
+                return d / "stats", d / "playerdata"
     except OSError:
         pass
     return None
@@ -381,19 +385,20 @@ async def playerstats():
         cache = json.loads((data / "usercache.json").read_text())
     except (OSError, ValueError):
         return {"players": {}, "error": f"usercache.json not readable under {data}."}
-    world = _world_dir(data)
+    dirs = _player_dirs(data)
     players: dict[str, dict] = {}
     for entry in cache:
         name, uuid = entry.get("name"), entry.get("uuid")
-        if not name or not uuid or world is None:
+        if not name or not uuid or dirs is None:
             continue
+        stats_dir, playerdata_dir = dirs
         info: dict = {"last_seen": None, "hours": None}
         try:
-            info["last_seen"] = int((world / "playerdata" / f"{uuid}.dat").stat().st_mtime)
+            info["last_seen"] = int((playerdata_dir / f"{uuid}.dat").stat().st_mtime)
         except OSError:
             pass
         try:
-            stats = json.loads((world / "stats" / f"{uuid}.json").read_text())
+            stats = json.loads((stats_dir / f"{uuid}.json").read_text())
             custom = stats.get("stats", {}).get("minecraft:custom", {})
             for key in _PLAY_TIME_KEYS:
                 if key in custom:
