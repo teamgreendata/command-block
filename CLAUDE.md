@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 46 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 50 tests, no network, no MC server
 node --test                                   # frontend command builders: 31 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -73,10 +73,22 @@ template (set empty to disable avatar fetching).
   keep new frontend logic that builds strings DOM-free in `quick-commands.js` so
   `node --test` can cover it.
 - **`GET /api/avatar/{name}` is the project's one backend-outbound internet call**: it
-  proxies player heads from mc-heads.net (by name) with an in-memory cache (6h, failures
-  10min) so the browser stays LAN-only. `AVATAR_URL=` (empty) disables it; on 404 the
-  frontend swaps in a built-in pixel-face placeholder. Don't add other outbound calls
-  without the same cache + kill-switch treatment.
+  proxies mc-heads.net renders (by name; `?full=1` = full-body via `AVATAR_BODY_URL`,
+  else the face) with an in-memory cache (6h, failures 10min) so the browser stays
+  LAN-only. `AVATAR_URL=` (empty) disables ALL avatar fetching; on 404 the frontend swaps
+  in a built-in pixel-body placeholder. Don't add other outbound calls without the same
+  cache + kill-switch treatment.
+- **World-state files on Paper 26.2** (this generation gutted `level.dat` to ~600 bytes):
+  weather is NBT at `world/dimensions/minecraft/overworld/data/minecraft/weather.dat`
+  (`raining`/`thundering` bytes), and the cumulative day counter is `total_ticks` in the
+  **overworld's** `data/minecraft/world_clocks.dat` — the world-level copy of that file
+  exists but stays at 0 (decoy). Both update only on save, so `/api/clock`'s weather can
+  lag ~5 min (the UI compensates by showing just-sent weather commands optimistically).
+  There is **no RCON weather query**; live time-of-day is the new timeline syntax
+  `time query day` → "Timeline minecraft:day is at N tick(s)" (wraps at 24000, 0=06:00;
+  the old `time query daytime` is gone). `session.lock` mtime = world-load time (uptime).
+  `/api/serverinfo` adds RCON `mspt`/`seed`/`difficulty`/`banlist` + server.properties
+  + a 5-min-cached world-size walk.
 - `GET /api/playerstats` (cards' "Last seen"/"Played") reads the **read-only data-dir
   mount** (`/mc-data`): `usercache.json` for name→UUID, the world's per-player stats
   JSON play-time counter (72000 ticks = 1h; legacy `play_one_minute` key also handled),
@@ -94,9 +106,10 @@ template (set empty to disable avatar fetching).
   grabs an online player's spot via `data get entity` for the capture-position button.
   Waypoint teleports go through `buildWaypointTp` — `execute in <dim> run tp` whenever
   the waypoint recorded a dimension, so cross-dimension teleports work.
-- UI structure: five hash-routed tabs — **Dashboard** (status + Global commands panel +
-  a card per whitelisted/online player), **Console**, **Whitelist**, **Waypoints**,
-  **Logs**. The card vs
+- UI structure: six hash-routed tabs — **Dashboard** (Global commands across the top +
+  a full-body card per whitelisted/online player), **Server Info** (status/facts +
+  world panel), **Console**, **Whitelist**, **Waypoints**, **Logs** — plus the header's
+  sky widget (status dot, in-game clock + day/night icon, day count, weather). The card vs
   global split is data-driven: each command in `quick-commands.js` carries
   `scope: 'player'|'global'`, and player commands name their `playerField`, which cards
   auto-fill with the card's player and hide (`cardHide` drops extra fields, e.g. summon's

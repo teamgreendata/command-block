@@ -7,6 +7,7 @@ single piece of state is waypoints.json in the cb_data volume.
 
 import asyncio
 import base64
+import gzip
 import json
 import os
 import re
@@ -363,19 +364,27 @@ def _data_dir() -> Path:
     return Path(_env("MC_DATA", "/mc-data"))
 
 
-def _player_dirs(data: Path) -> tuple[Path, Path] | None:
-    """(stats_dir, playerdata_dir) — the world folder name varies, and this MC
-    generation moved the files: world/players/{stats,data} instead of the
-    classic world/{stats,playerdata}. Support both."""
+def _world_root(data: Path) -> Path | None:
+    # the world folder name varies (level-name) — find it by its player files
     try:
         for d in sorted(data.iterdir()):
-            if (d / "players").is_dir():
-                return d / "players" / "stats", d / "players" / "data"
-            if (d / "playerdata").is_dir():
-                return d / "stats", d / "playerdata"
+            if (d / "players").is_dir() or (d / "playerdata").is_dir():
+                return d
     except OSError:
         pass
     return None
+
+
+def _player_dirs(data: Path) -> tuple[Path, Path] | None:
+    """(stats_dir, playerdata_dir) — this MC generation moved the files:
+    world/players/{stats,data} instead of the classic world/{stats,playerdata}.
+    Support both."""
+    world = _world_root(data)
+    if world is None:
+        return None
+    if (world / "players").is_dir():
+        return world / "players" / "stats", world / "players" / "data"
+    return world / "stats", world / "playerdata"
 
 
 @app.get("/api/playerstats")
@@ -410,6 +419,189 @@ async def playerstats():
     return {"players": players}
 
 
+# ---------------------------------------------------------------- world clock & info
+
+# This MC generation gutted level.dat: weather lives in the overworld's
+# dimensions/.../data/minecraft/weather.dat and cumulative day ticks in the
+# world's data/minecraft/world_clocks.dat (both NBT, updated on save). The
+# live time of day comes from RCON `time query day` — the new timeline system
+# ("Timeline minecraft:day is at N tick(s)", wrapping at 24000).
+_TICKS_PER_DAY = 24000
+_DAY_TICK_RE = re.compile(r"is at (\d+) tick")
+_INT_RE = re.compile(r"-?\d+")
+
+
+def _nbt_byte(raw: bytes, name: bytes) -> int | None:
+    pat = b"\x01" + len(name).to_bytes(2, "big") + name
+    i = raw.find(pat)
+    return raw[i + len(pat)] if i >= 0 else None
+
+
+def _nbt_long_after(raw: bytes, anchor: bytes, name: bytes) -> int | None:
+    start = raw.find(anchor)
+    if start < 0:
+        return None
+    pat = b"\x04" + len(name).to_bytes(2, "big") + name
+    i = raw.find(pat, start)
+    if i < 0:
+        return None
+    j = i + len(pat)
+    return int.from_bytes(raw[j:j + 8], "big", signed=True)
+
+
+def _read_nbt_file(path: Path) -> bytes | None:
+    try:
+        return gzip.decompress(path.read_bytes())
+    except (OSError, gzip.BadGzipFile, EOFError):
+        return None
+
+
+def _read_weather(data: Path) -> str | None:
+    world = _world_root(data)
+    if world is None:
+        return None
+    raw = _read_nbt_file(
+        world / "dimensions" / "minecraft" / "overworld" / "data" / "minecraft" / "weather.dat")
+    if raw is None:
+        return None
+    if _nbt_byte(raw, b"thundering"):
+        return "thunder"
+    if _nbt_byte(raw, b"raining"):
+        return "rain"
+    return "clear"
+
+
+def _read_day(data: Path) -> int | None:
+    world = _world_root(data)
+    if world is None:
+        return None
+    # the overworld's own data file is the live one; the world-level
+    # world_clocks.dat exists but stays at 0 on Paper 26.2
+    candidates = (
+        world / "dimensions" / "minecraft" / "overworld" / "data" / "minecraft" / "world_clocks.dat",
+        world / "data" / "minecraft" / "world_clocks.dat",
+    )
+    for path in candidates:
+        raw = _read_nbt_file(path)
+        if raw is None:
+            continue
+        total = _nbt_long_after(raw, b"minecraft:overworld", b"total_ticks")
+        if total is not None:
+            return total // _TICKS_PER_DAY + 1
+    return None
+
+
+def clock_from_tick(t: int) -> dict:
+    # tick 0 = 06:00; beds work 12542–23459, call that night
+    hours = (6 + t / 1000) % 24
+    return {
+        "clock": f"{int(hours):02d}:{int(hours % 1 * 60):02d}",
+        "phase": "night" if 12542 <= t < 23459 else "day",
+    }
+
+
+@app.get("/api/clock")
+async def clock():
+    data = _data_dir()
+    out: dict = {"online": False, "weather": _read_weather(data), "day": _read_day(data)}
+    try:
+        raw = strip_colors(await rcon_command("time query day"))
+        m = _DAY_TICK_RE.search(raw)
+        if m:
+            tick = int(m.group(1)) % _TICKS_PER_DAY
+            out.update(clock_from_tick(tick), online=True, daytick=tick)
+    except RconError:
+        pass
+    return out
+
+
+def parse_mspt(raw: str) -> dict:
+    # "Server tick times (avg/min/max) from last 5s, 10s, 1m: a/b/c, a/b/c, a/b/c"
+    cleaned = strip_colors(raw)
+    if ":" not in cleaned:
+        return {}
+    floats = re.findall(r"\d+(?:\.\d+)?", cleaned.rsplit(":", 1)[1])
+    if len(floats) < 9:
+        return {}
+    avg, low, high = (float(f) for f in floats[-3:])  # the 1m figures
+    return {"avg": avg, "min": low, "max": high}
+
+
+def _server_props(data: Path) -> dict:
+    try:
+        lines = (data / "server.properties").read_text().splitlines()
+    except OSError:
+        return {}
+    return dict(line.split("=", 1) for line in lines if "=" in line and not line.startswith("#"))
+
+
+_world_size_cache: tuple[float, int] | None = None
+
+
+def _world_size(data: Path) -> int | None:
+    global _world_size_cache
+    if _world_size_cache and time.monotonic() - _world_size_cache[0] < 300:
+        return _world_size_cache[1]
+    world = _world_root(data)
+    if world is None:
+        return None
+    total = 0
+    for p in world.rglob("*"):
+        try:
+            if p.is_file():
+                total += p.stat().st_size
+        except OSError:
+            pass
+    _world_size_cache = (time.monotonic(), total)
+    return total
+
+
+@app.get("/api/serverinfo")
+async def serverinfo():
+    data = _data_dir()
+    out: dict = {"online": False}
+
+    async def query(cmd: str) -> str | None:
+        try:
+            raw = strip_colors(await rcon_command(cmd))
+            out["online"] = True
+            return raw
+        except RconError:
+            return None
+
+    if (r := await query("difficulty")) and (m := re.search(r"difficulty is (\w+)", r)):
+        out["difficulty"] = m.group(1)
+    if (r := await query("seed")) and (m := re.search(r"\[(-?\d+)\]", r)):
+        out["seed"] = m.group(1)
+    if r := await query("mspt"):
+        mspt = parse_mspt(r)
+        if mspt:
+            out["mspt"] = mspt
+    if r := await query("banlist"):
+        out["bans"] = 0 if "no ban" in r.lower() else \
+            int(m.group()) if (m := _INT_RE.search(r)) else 0
+    if r := await query("whitelist list"):
+        out["whitelisted"] = len(parse_whitelist(r))
+
+    props = _server_props(data)
+    for key, out_key in (("view-distance", "view_distance"),
+                         ("simulation-distance", "simulation_distance"),
+                         ("max-players", "max_players")):
+        if key in props:
+            out[out_key] = props[key]
+    world = _world_root(data)
+    if world is not None:
+        try:  # session.lock is (re)written when the server locks the world at boot
+            out["uptime_s"] = max(0, int(time.time() - (world / "session.lock").stat().st_mtime))
+        except OSError:
+            pass
+    size = _world_size(data)
+    if size is not None:
+        out["world_size_mb"] = round(size / 1e6, 1)
+    out["day"] = _read_day(data)
+    return out
+
+
 # ---------------------------------------------------------------- avatars
 
 # The one backend-outbound internet call in the project: player heads for the
@@ -417,6 +609,7 @@ async def playerstats():
 # AVATAR_URL env overrides the template; set it empty to disable fetching
 # entirely (the frontend falls back to a built-in placeholder face on 404).
 AVATAR_DEFAULT_URL = "https://mc-heads.net/avatar/{name}/64"
+AVATAR_BODY_DEFAULT_URL = "https://mc-heads.net/body/{name}/100"  # 100x240 full render
 AVATAR_TTL = 6 * 3600
 AVATAR_NEG_TTL = 600  # failed lookups retry after 10 minutes
 _avatar_cache: dict[str, tuple[bytes | None, float]] = {}
@@ -439,13 +632,17 @@ def _avatar_reply(data: bytes | None) -> Response:
 
 
 @app.get("/api/avatar/{name}")
-async def avatar(name: str):
+async def avatar(name: str, full: bool = False):
     if not _NAME_RE.match(name):
         return _bad_request("Invalid player name (letters, digits, underscore; max 16).")
+    # AVATAR_URL= (empty) is the kill switch for ALL avatar fetching
     template = _env("AVATAR_URL", AVATAR_DEFAULT_URL)
     if not template:
         return _avatar_reply(None)
-    cached = _avatar_cache.get(name)
+    if full:
+        template = _env("AVATAR_BODY_URL", AVATAR_BODY_DEFAULT_URL)
+    key = f"body:{name}" if full else name
+    cached = _avatar_cache.get(key)
     if cached:
         data, fetched_at = cached
         ttl = AVATAR_TTL if data is not None else AVATAR_NEG_TTL
@@ -455,7 +652,7 @@ async def avatar(name: str):
         data = await asyncio.to_thread(fetch_avatar, template.format(name=name))
     except Exception:
         data = None
-    _avatar_cache[name] = (data, time.monotonic())
+    _avatar_cache[key] = (data, time.monotonic())
     return _avatar_reply(data)
 
 

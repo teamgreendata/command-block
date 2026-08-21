@@ -1,8 +1,9 @@
 # command-block
 
-A small self-hosted admin dashboard for the Minecraft server stack — live status,
-a card per player with their avatar, last-seen time, hours played, and the
-player-targeted commands right on it
+A small self-hosted admin dashboard for the Minecraft server stack — live status
+with an in-game clock/weather widget, a Server Info tab (day count, uptime, world
+size, seed, MSPT, distances…), a card per player with their full-body skin render,
+last-seen time, hours played, and the player-targeted commands right on it
 (teleport, give, effect, gamemode, XP, message, summon, clear, kill, kick, ban),
 global commands with one-click presets (time, weather, game rules, difficulty),
 saved teleport waypoints (grab a player's live position, name it, teleport

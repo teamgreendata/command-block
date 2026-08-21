@@ -1,4 +1,5 @@
 import base64
+import gzip
 import json
 
 import pytest
@@ -211,6 +212,108 @@ def test_avatar_disabled_via_empty_env(client, monkeypatch, avatar_fetches):
 
 UUID_A = "11111111-2222-3333-4444-555555555555"
 UUID_B = "66666666-7777-8888-9999-000000000000"
+
+# Byte-for-byte from a live Paper 26.2 world: raining=1, thundering=0, and
+# world_clocks with overworld total_ticks=0x698e (27022 -> day 2).
+WEATHER_NBT = (
+    b"\n\x00\x00\x03\x00\x0bDataVersion\x00\x00\x13'\n\x00\x04data"
+    b"\x03\x00\x0cthunder_time\x00\x00A\xca\x01\x00\nthundering\x00"
+    b"\x03\x00\x09rain_time\x00\x00A\xca\x01\x00\x07raining\x01"
+    b"\x03\x00\x12clear_weather_time\x00\x00\x00\x00\x00\x00"
+)
+CLOCKS_NBT = (
+    b"\n\x00\x00\x03\x00\x0bDataVersion\x00\x00\x13'\n\x00\x04data"
+    b"\n\x00\x13minecraft:overworld\x04\x00\x0btotal_ticks\x00\x00\x00\x00\x00\x00i\x8e\x00"
+    b"\n\x00\x11minecraft:the_end\x04\x00\x0btotal_ticks\x00\x00\x00\x00\x00\x00\x0b\xce\x00\x00\x00"
+)
+
+
+@pytest.fixture
+def world_files(tmp_path, monkeypatch):
+    """A modern-layout world with weather, clocks, session.lock, properties."""
+    monkeypatch.setenv("MC_DATA", str(tmp_path))
+    main._world_size_cache = None
+    world = tmp_path / "world"
+    (world / "players" / "data").mkdir(parents=True)
+    ow_data = world / "dimensions" / "minecraft" / "overworld" / "data" / "minecraft"
+    ow_data.mkdir(parents=True)
+    (ow_data / "weather.dat").write_bytes(gzip.compress(WEATHER_NBT))
+    # live clocks are per-dimension; the world-level file stays at 0 (decoy)
+    (ow_data / "world_clocks.dat").write_bytes(gzip.compress(CLOCKS_NBT))
+    (world / "session.lock").write_bytes(b"\xe2\x98\x83")
+    (world / "region").mkdir()
+    (world / "region" / "r.0.0.mca").write_bytes(b"\x00" * 1_500_000)
+    (tmp_path / "server.properties").write_text(
+        "#comment\nview-distance=10\nsimulation-distance=8\nmax-players=20\nmotd=A=B\n")
+    return tmp_path
+
+
+def test_clock_reads_timeline_weather_and_day(client, world_files, monkeypatch):
+    async def fake(command, *, expect_disconnect=False):
+        return "Timeline minecraft:day is at 6212 tick(s)"
+
+    monkeypatch.setattr(main, "rcon_command", fake)
+    c = client.get("/api/clock").json()
+    assert c["online"] is True
+    assert c["clock"] == "12:12"  # tick 0 = 06:00
+    assert c["phase"] == "day"
+    assert c["weather"] == "rain"
+    assert c["day"] == 2  # 27022 total ticks
+
+
+def test_clock_night_and_rcon_down(client, world_files, monkeypatch):
+    async def fake(command, *, expect_disconnect=False):
+        return "Timeline minecraft:day is at 18000 tick(s)"
+
+    monkeypatch.setattr(main, "rcon_command", fake)
+    c = client.get("/api/clock").json()
+    assert (c["clock"], c["phase"]) == ("00:00", "night")
+
+    async def down(command, *, expect_disconnect=False):
+        raise RconError("down")
+
+    monkeypatch.setattr(main, "rcon_command", down)
+    c = client.get("/api/clock").json()
+    assert c["online"] is False
+    assert c["weather"] == "rain"  # file-based facts survive RCON being down
+
+
+def test_serverinfo_combines_rcon_and_files(client, world_files, monkeypatch):
+    responses = {
+        "difficulty": "The difficulty is Hard",
+        "seed": "Seed: [8349692590103972803]",
+        "mspt": "Server tick times (avg/min/max) from last 5s, 10s, 1m: "
+                "0.9/0.3/21.5, 0.9/0.3/21.5, 1.3/0.3/22.2",
+        "banlist": "There are no bans",
+        "whitelist list": "There are 2 whitelisted player(s): alice, bob",
+    }
+
+    async def fake(command, *, expect_disconnect=False):
+        return responses[command]
+
+    monkeypatch.setattr(main, "rcon_command", fake)
+    s = client.get("/api/serverinfo").json()
+    assert s["online"] is True
+    assert s["difficulty"] == "Hard"
+    assert s["seed"] == "8349692590103972803"
+    assert s["mspt"] == {"avg": 1.3, "min": 0.3, "max": 22.2}  # the 1m figures
+    assert s["bans"] == 0
+    assert s["whitelisted"] == 2
+    assert s["view_distance"] == "10"
+    assert s["simulation_distance"] == "8"
+    assert 0 <= s["uptime_s"] < 10  # session.lock just written
+    assert s["world_size_mb"] == 1.5
+    assert s["day"] == 2
+
+
+def test_avatar_full_body_cached_separately(client, avatar_fetches):
+    client.get("/api/avatar/alice")
+    client.get("/api/avatar/alice?full=1")
+    client.get("/api/avatar/alice?full=1")  # cache hit
+    assert avatar_fetches == [
+        "https://mc-heads.net/avatar/alice/64",
+        "https://mc-heads.net/body/alice/100",
+    ]
 
 
 @pytest.fixture

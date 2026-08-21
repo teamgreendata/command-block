@@ -11,6 +11,8 @@ const CARD_COMMANDS = CARD_ORDER.map(findCommand).filter(Boolean);
 let restarting = false;
 let statusTimer = null;
 let logsTimer = null;
+let clockTimer = null;
+let infoTimer = null;
 const history = [];
 let histIdx = -1;
 
@@ -68,7 +70,7 @@ function fillList(ul, items, emptyText) {
 
 // ---------------------------------------------------------------- tabs
 
-const TABS = ['dashboard', 'console', 'whitelist', 'waypoints', 'logs'];
+const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'logs'];
 
 function showTab(name) {
   if (!TABS.includes(name)) name = 'dashboard';
@@ -132,6 +134,78 @@ async function refreshTps() {
       ? `${t.tps_1m} / ${t.tps_5m} / ${t.tps_15m} (1m/5m/15m)`
       : stripCodes(t.raw);
   } catch { $('#st-tps').textContent = '–'; }
+}
+
+// ---------------------------------------------------------------- sky widget & server info
+
+const SUN_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect x='2' y='2' width='4' height='4' fill='%23ffd83d'/%3E%3Crect x='3' y='0' width='2' height='1' fill='%23ffd83d'/%3E%3Crect x='3' y='7' width='2' height='1' fill='%23ffd83d'/%3E%3Crect x='0' y='3' width='1' height='2' fill='%23ffd83d'/%3E%3Crect x='7' y='3' width='1' height='2' fill='%23ffd83d'/%3E%3C/svg%3E";
+const MOON_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect x='2' y='2' width='4' height='4' fill='%23dfe6ff'/%3E%3Crect x='3' y='3' width='1' height='1' fill='%239aa8d8'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%239aa8d8'/%3E%3C/svg%3E";
+const WEATHER_LABEL = { clear: 'Clear', rain: 'Rain', thunder: 'Thunder' };
+
+function showWeather(kind) {
+  const wx = $('#sky-weather');
+  wx.textContent = kind ? (WEATHER_LABEL[kind] || kind) : '';
+  wx.className = kind ? `wx-${kind}` : '';
+}
+
+async function refreshClock() {
+  try {
+    const c = await api('/api/clock');
+    const icon = $('#sky-icon');
+    if (c.online && c.clock) {
+      $('#sky-time').textContent = c.clock;
+      icon.src = c.phase === 'night' ? MOON_ICON : SUN_ICON;
+      icon.hidden = false;
+    } else {
+      $('#sky-time').textContent = '–';
+      icon.hidden = true;
+    }
+    $('#sky-day').textContent = c.day ? `Day ${c.day}` : '';
+    showWeather(c.weather);
+  } catch { /* leave the widget as-is */ }
+  clearTimeout(clockTimer);
+  clockTimer = setTimeout(refreshClock, 10000);
+}
+
+function fmtDuration(s) {
+  const d = Math.floor(s / 86400);
+  const h = Math.floor(s % 86400 / 3600);
+  const m = Math.floor(s % 3600 / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  return `${m} min`;
+}
+
+async function refreshServerInfo() {
+  try {
+    const s = await api('/api/serverinfo');
+    const rows = [
+      ['Day', s.day ?? '–'],
+      ['Uptime', s.uptime_s != null ? fmtDuration(s.uptime_s) : '–'],
+      ['World size', s.world_size_mb != null
+        ? (s.world_size_mb >= 1000 ? `${(s.world_size_mb / 1000).toFixed(2)} GB` : `${s.world_size_mb} MB`)
+        : '–'],
+      ['Seed', s.seed ?? '–'],
+      ['Difficulty', s.difficulty ?? '–'],
+      ['MSPT (1m)', s.mspt ? `${s.mspt.avg} avg (${s.mspt.min}–${s.mspt.max})` : '–'],
+      ['View distance', s.view_distance ?? '–'],
+      ['Sim. distance', s.simulation_distance ?? '–'],
+      ['Whitelisted', s.whitelisted ?? '–'],
+      ['Banned', s.bans ?? '–'],
+    ];
+    const dl = $('#world-facts');
+    dl.replaceChildren();
+    for (const [k, v] of rows) {
+      const dt = document.createElement('dt');
+      dt.textContent = k;
+      const dd = document.createElement('dd');
+      dd.textContent = v;
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    }
+  } catch { /* keep the last values */ }
+  clearTimeout(infoTimer);
+  infoTimer = setTimeout(refreshServerInfo, 30000);
 }
 
 // ---------------------------------------------------------------- player data
@@ -338,9 +412,9 @@ $('#wp-grab-btn').addEventListener('click', async () => {
 
 // ---------------------------------------------------------------- player cards
 
-// Pixel-face placeholder for when the avatar proxy has nothing (offline,
+// Pixel full-body placeholder for when the avatar proxy has nothing (offline,
 // disabled, or an unknown name) — keeps the frontend free of external requests.
-const FALLBACK_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%23b6896c'/%3E%3Crect width='8' height='2' fill='%232a1f0e'/%3E%3Crect x='1' y='4' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='2' y='4' width='1' height='1' fill='%234a3bb3'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%234a3bb3'/%3E%3Crect x='6' y='4' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='3' y='5' width='2' height='1' fill='%238a613f'/%3E%3Crect x='3' y='6' width='2' height='1' fill='%235a3d28'/%3E%3C/svg%3E";
+const FALLBACK_BODY = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 32' shape-rendering='crispEdges'%3E%3Crect x='4' width='8' height='8' fill='%23b6896c'/%3E%3Crect x='4' width='8' height='2' fill='%232a1f0e'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='6' y='4' width='1' height='1' fill='%234a3bb3'/%3E%3Crect x='9' y='4' width='1' height='1' fill='%234a3bb3'/%3E%3Crect x='10' y='4' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='4' y='8' width='8' height='12' fill='%2300a8a8'/%3E%3Crect y='8' width='4' height='12' fill='%23b6896c'/%3E%3Crect x='12' y='8' width='4' height='12' fill='%23b6896c'/%3E%3Crect x='4' y='20' width='8' height='10' fill='%233c44aa'/%3E%3Crect x='4' y='30' width='8' height='2' fill='%236e6e6e'/%3E%3C/svg%3E";
 
 let cardsKey = null; // change detection so open card forms aren't clobbered
 
@@ -375,10 +449,8 @@ function playerCard(name, isOnline) {
   const img = document.createElement('img');
   img.className = 'avatar';
   img.alt = '';
-  img.width = 64;
-  img.height = 64;
-  img.src = `/api/avatar/${name}`;
-  img.addEventListener('error', () => { img.src = FALLBACK_AVATAR; }, { once: true });
+  img.src = `/api/avatar/${name}?full=1`;
+  img.addEventListener('error', () => { img.src = FALLBACK_BODY; }, { once: true });
   head.appendChild(img);
 
   const id = document.createElement('div');
@@ -522,6 +594,11 @@ async function sendRaw(command, confirmText) {
   try {
     const r = await api('/api/command', { command });
     consoleLine(command, stripCodes(r.raw));
+    // keep the sky widget honest right away: time reflects live via RCON,
+    // weather only hits disk on save — so show the just-set weather directly
+    if (/^time /.test(command)) setTimeout(refreshClock, 500);
+    const wx = command.match(/^weather (clear|rain|thunder)/);
+    if (wx) showWeather(wx[1]);
   } catch (err) {
     consoleLine(command, err.message, true);
   }
@@ -754,5 +831,7 @@ renderGlobalFields(GLOBAL_COMMANDS[0]);
 renderCards();
 refreshWaypoints();
 refreshStatus();
+refreshClock();
+refreshServerInfo();
 refreshWhitelist();
 refreshLogs();

@@ -41,9 +41,14 @@ body {
 
 header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 1rem;
   padding: 0.8rem 1.2rem 0.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  flex-wrap: wrap;
 }
 header h1 {
   margin: 0;
@@ -64,6 +69,24 @@ header h1::before {
 }
 #msg { font-size: 0.85rem; color: #fff; text-shadow: 2px 2px 0 #3f3f3f; }
 #msg.error { color: var(--red); }
+
+/* in-game clock + weather, chat-box style, top right */
+#sky {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  background: rgba(0, 0, 0, 0.65);
+  border: 2px solid #555;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+  color: #e8e8e8;
+}
+#sky img { image-rendering: pixelated; }
+#sky-day { color: #a0a0a0; }
+.wx-clear { color: #e8e8e8; }
+.wx-rain { color: #55aaff; }
+.wx-thunder { color: var(--gold); }
 
 /* Creative-inventory-style tab bar: the active tab comes forward in panel gray */
 #tabs {
@@ -100,9 +123,15 @@ main {
   grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
   gap: 1rem;
 }
-/* single-panel tabs */
-#page-console.active, #page-whitelist.active, #page-waypoints.active, #page-logs.active { grid-template-columns: 1fr; }
+/* single-column tabs (dashboard panels are all full-width now) */
+#page-dashboard.active, #page-console.active, #page-whitelist.active,
+#page-waypoints.active, #page-logs.active { grid-template-columns: 1fr; }
 @media (max-width: 750px) { .tab-page.active { grid-template-columns: 1fr; } }
+
+/* global commands: builder + broadcast side by side across the top */
+.g-cols { display: grid; grid-template-columns: 2fr 1fr; gap: 1.2rem; align-items: start; }
+.g-broadcast h3 { margin-top: 0; }
+@media (max-width: 750px) { .g-cols { grid-template-columns: 1fr; } }
 
 /* Inventory-window panel: black outline, light top-left bevel, dark bottom-right */
 .panel {
@@ -249,13 +278,17 @@ select:focus { outline: none; border-color: #fff; }
   flex-direction: column;
   gap: 0.6rem;
 }
-.pc-head { display: flex; gap: 0.7rem; align-items: flex-start; }
+.pc-head { display: flex; gap: 0.8rem; align-items: flex-start; }
+/* full-body render in a display-case slot */
 .avatar {
-  width: 64px;
-  height: 64px;
+  width: 76px;
+  height: 178px;
   flex: none;
   border: 2px solid #000;
   background: #6f6f6f;
+  object-fit: contain;
+  padding: 3px;
+  box-sizing: border-box;
   image-rendering: pixelated;
 }
 .pc-id { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }

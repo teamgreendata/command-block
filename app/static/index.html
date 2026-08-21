@@ -11,10 +11,18 @@
 <header>
   <h1>command-block</h1>
   <span id="msg" hidden></span>
+  <div id="sky" title="in-game time & weather">
+    <span id="status-dot" class="dot"></span>
+    <img id="sky-icon" width="16" height="16" alt="" hidden>
+    <span id="sky-time">–</span>
+    <span id="sky-day"></span>
+    <span id="sky-weather"></span>
+  </div>
 </header>
 
 <nav id="tabs">
   <button type="button" class="tab" data-tab="dashboard">Dashboard</button>
+  <button type="button" class="tab" data-tab="server">Server Info</button>
   <button type="button" class="tab" data-tab="console">Console</button>
   <button type="button" class="tab" data-tab="whitelist">Whitelist</button>
   <button type="button" class="tab" data-tab="waypoints">Waypoints</button>
@@ -25,10 +33,40 @@
 
   <section class="tab-page" id="page-dashboard">
 
+    <section class="panel" id="global-panel">
+      <h2>Global commands</h2>
+      <div id="preset-row" class="preset-row"></div>
+      <div class="g-cols">
+        <form id="quick-form" autocomplete="off">
+          <div class="quick-top">
+            <select id="quick-cmd"></select>
+            <button>Send</button>
+          </div>
+          <div id="quick-fields" class="quick-fields"></div>
+          <p id="quick-desc" class="quick-desc"></p>
+        </form>
+        <div class="g-broadcast">
+          <h3>Broadcast</h3>
+          <form id="broadcast-form" autocomplete="off">
+            <input id="broadcast-msg" placeholder="message to everyone online">
+            <button>Say</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="players-panel">
+      <h2>Players</h2>
+      <div id="player-cards" class="player-cards"></div>
+    </section>
+
+  </section>
+
+  <section class="tab-page" id="page-server">
+
     <section class="panel" id="status-panel">
       <h2>Server</h2>
       <div class="status-row">
-        <span id="status-dot" class="dot"></span>
         <span id="status-text">checking…</span>
       </div>
       <dl class="facts">
@@ -44,27 +82,9 @@
       </div>
     </section>
 
-    <section class="panel" id="global-panel">
-      <h2>Global commands</h2>
-      <div id="preset-row" class="preset-row"></div>
-      <form id="quick-form" autocomplete="off">
-        <div class="quick-top">
-          <select id="quick-cmd"></select>
-          <button>Send</button>
-        </div>
-        <div id="quick-fields" class="quick-fields"></div>
-        <p id="quick-desc" class="quick-desc"></p>
-      </form>
-      <h3>Broadcast</h3>
-      <form id="broadcast-form" autocomplete="off">
-        <input id="broadcast-msg" placeholder="message to everyone online">
-        <button>Say</button>
-      </form>
-    </section>
-
-    <section class="panel" id="players-panel">
-      <h2>Players</h2>
-      <div id="player-cards" class="player-cards"></div>
+    <section class="panel" id="world-panel">
+      <h2>World</h2>
+      <dl class="facts" id="world-facts"><dt>–</dt><dd>loading…</dd></dl>
     </section>
 
   </section>
