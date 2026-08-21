@@ -138,30 +138,48 @@ async function refreshTps() {
 
 // ---------------------------------------------------------------- sky widget & server info
 
-const SUN_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect x='2' y='2' width='4' height='4' fill='%23ffd83d'/%3E%3Crect x='3' y='0' width='2' height='1' fill='%23ffd83d'/%3E%3Crect x='3' y='7' width='2' height='1' fill='%23ffd83d'/%3E%3Crect x='0' y='3' width='1' height='2' fill='%23ffd83d'/%3E%3Crect x='7' y='3' width='1' height='2' fill='%23ffd83d'/%3E%3C/svg%3E";
-const MOON_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect x='2' y='2' width='4' height='4' fill='%23dfe6ff'/%3E%3Crect x='3' y='3' width='1' height='1' fill='%239aa8d8'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%239aa8d8'/%3E%3C/svg%3E";
-const WEATHER_LABEL = { clear: 'Clear', rain: 'Rain', thunder: 'Thunder' };
+// Weather-app-style pixel condition icons (sun / moon / rain cloud / storm cloud)
+const SUN_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' shape-rendering='crispEdges'%3E%3Crect x='4' y='4' width='4' height='4' fill='%23ffd83d'/%3E%3Crect x='5' y='1' width='2' height='2' fill='%23ffd83d'/%3E%3Crect x='5' y='9' width='2' height='2' fill='%23ffd83d'/%3E%3Crect x='1' y='5' width='2' height='2' fill='%23ffd83d'/%3E%3Crect x='9' y='5' width='2' height='2' fill='%23ffd83d'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%23ffb300'/%3E%3Crect x='9' y='2' width='1' height='1' fill='%23ffb300'/%3E%3Crect x='2' y='9' width='1' height='1' fill='%23ffb300'/%3E%3Crect x='9' y='9' width='1' height='1' fill='%23ffb300'/%3E%3C/svg%3E";
+const MOON_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' shape-rendering='crispEdges'%3E%3Crect x='3' y='2' width='6' height='8' fill='%23dfe6ff'/%3E%3Crect x='2' y='3' width='8' height='6' fill='%23dfe6ff'/%3E%3Crect x='4' y='4' width='2' height='2' fill='%239aa8d8'/%3E%3Crect x='7' y='6' width='1' height='1' fill='%239aa8d8'/%3E%3Crect x='5' y='7' width='1' height='1' fill='%239aa8d8'/%3E%3C/svg%3E";
+const RAIN_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' shape-rendering='crispEdges'%3E%3Crect x='3' y='1' width='5' height='1' fill='%23e8e8e8'/%3E%3Crect x='2' y='2' width='8' height='2' fill='%23e8e8e8'/%3E%3Crect x='1' y='4' width='10' height='2' fill='%23c9ced6'/%3E%3Crect x='2' y='7' width='1' height='2' fill='%2355aaff'/%3E%3Crect x='5' y='8' width='1' height='2' fill='%2355aaff'/%3E%3Crect x='8' y='7' width='1' height='2' fill='%2355aaff'/%3E%3C/svg%3E";
+const THUNDER_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' shape-rendering='crispEdges'%3E%3Crect x='3' y='1' width='5' height='1' fill='%23aab0b8'/%3E%3Crect x='2' y='2' width='8' height='2' fill='%23aab0b8'/%3E%3Crect x='1' y='4' width='10' height='2' fill='%23868c96'/%3E%3Crect x='6' y='6' width='2' height='2' fill='%23ffd83d'/%3E%3Crect x='5' y='8' width='2' height='2' fill='%23ffd83d'/%3E%3Crect x='4' y='10' width='2' height='1' fill='%23ffd83d'/%3E%3Crect x='2' y='7' width='1' height='2' fill='%2355aaff'/%3E%3Crect x='9' y='7' width='1' height='2' fill='%2355aaff'/%3E%3C/svg%3E";
 
-function showWeather(kind) {
+let lastPhase = 'day';
+
+// weather + day/night → a single weather-app condition (icon, label, css class)
+function skyCondition(weather, phase) {
+  if (weather === 'thunder') return [THUNDER_ICON, 'Thunderstorm', 'wx-thunder'];
+  if (weather === 'rain') return [RAIN_ICON, 'Raining', 'wx-rain'];
+  if (weather === 'clear') {
+    return phase === 'night'
+      ? [MOON_ICON, 'Clear night', 'wx-night']
+      : [SUN_ICON, 'Sunny', 'wx-sunny'];
+  }
+  return [phase === 'night' ? MOON_ICON : SUN_ICON, '', ''];
+}
+
+function showWeather(kind, phase = lastPhase) {
+  const [icon, label, cls] = skyCondition(kind, phase);
+  const img = $('#sky-icon');
+  img.src = icon;
+  img.hidden = false;
   const wx = $('#sky-weather');
-  wx.textContent = kind ? (WEATHER_LABEL[kind] || kind) : '';
-  wx.className = kind ? `wx-${kind}` : '';
+  wx.textContent = label;
+  wx.className = cls;
 }
 
 async function refreshClock() {
   try {
     const c = await api('/api/clock');
-    const icon = $('#sky-icon');
-    if (c.online && c.clock) {
-      $('#sky-time').textContent = c.clock;
-      icon.src = c.phase === 'night' ? MOON_ICON : SUN_ICON;
-      icon.hidden = false;
-    } else {
-      $('#sky-time').textContent = '–';
-      icon.hidden = true;
-    }
+    if (c.phase) lastPhase = c.phase;
+    $('#sky-time').textContent = c.online && c.clock ? c.clock : '–';
     $('#sky-day').textContent = c.day ? `Day ${c.day}` : '';
-    showWeather(c.weather);
+    if (c.weather || c.online) {
+      showWeather(c.weather, lastPhase);
+    } else {
+      $('#sky-icon').hidden = true;
+      $('#sky-weather').textContent = '';
+    }
   } catch { /* leave the widget as-is */ }
   clearTimeout(clockTimer);
   clockTimer = setTimeout(refreshClock, 10000);

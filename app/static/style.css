@@ -82,9 +82,10 @@ header h1::before {
   font-size: 0.85rem;
   color: #e8e8e8;
 }
-#sky img { image-rendering: pixelated; }
+#sky img { image-rendering: pixelated; width: 22px; height: 22px; }
 #sky-day { color: #a0a0a0; }
-.wx-clear { color: #e8e8e8; }
+.wx-sunny { color: #ffd83d; }
+.wx-night { color: #dfe6ff; }
 .wx-rain { color: #55aaff; }
 .wx-thunder { color: var(--gold); }
 
