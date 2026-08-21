@@ -93,12 +93,19 @@ export const SUGGESTIONS = {
 };
 
 // Field types: select (fixed options) · player (online-players datalist +
-// selectors) · text (optional `suggest` key into SUGGESTIONS) · number.
+// selectors) · choice (friendly dropdown into SUGGESTIONS) · text · number.
+//
+// scope: 'player' commands render on the per-player dashboard cards, with the
+// field named by `playerField` auto-filled with the card's player and hidden
+// (cardHide lists any extra fields a card should drop); 'global' commands
+// render in the Global commands panel.
 export const QUICK_COMMANDS = [
   {
     name: 'gamemode',
     label: 'Game mode',
     desc: 'Change a player’s game mode.',
+    scope: 'player',
+    playerField: 'player',
     fields: [
       { key: 'mode', label: 'mode', type: 'select', options: ['survival', 'creative', 'adventure', 'spectator'], required: true },
       // required: over RCON there is no "self" for gamemode to default to
@@ -110,6 +117,8 @@ export const QUICK_COMMANDS = [
     name: 'give',
     label: 'Give item',
     desc: 'Spawn an item into a player’s inventory.',
+    scope: 'player',
+    playerField: 'player',
     fields: [
       { key: 'player', label: 'player', type: 'player', required: true },
       { key: 'item', label: 'item', type: 'choice', choices: 'items', required: true, placeholder: 'minecraft:iron_pickaxe' },
@@ -121,6 +130,8 @@ export const QUICK_COMMANDS = [
     name: 'tp',
     label: 'Teleport',
     desc: 'Teleport a player to another player or to x y z coordinates.',
+    scope: 'player',
+    playerField: 'player',
     fields: [
       { key: 'player', label: 'who', type: 'player', required: true },
       { key: 'dest', label: 'to (player or x y z)', type: 'player', required: true, placeholder: 'alice — or — 100 64 -200' },
@@ -131,6 +142,7 @@ export const QUICK_COMMANDS = [
     name: 'time',
     label: 'Set time',
     desc: 'Set the time of day (word or tick value 0–24000).',
+    scope: 'global',
     fields: [
       { key: 'value', label: 'time', type: 'choice', choices: 'timeOfDay', required: true, placeholder: 'tick value 0–24000' },
     ],
@@ -140,6 +152,7 @@ export const QUICK_COMMANDS = [
     name: 'weather',
     label: 'Weather',
     desc: 'Change the weather, optionally for a duration in seconds.',
+    scope: 'global',
     fields: [
       { key: 'kind', label: 'weather', type: 'select', options: ['clear', 'rain', 'thunder'], required: true },
       { key: 'duration', label: 'seconds', type: 'number' },
@@ -149,6 +162,7 @@ export const QUICK_COMMANDS = [
   {
     name: 'gamerule',
     label: 'Game rule',
+    scope: 'global',
     desc: 'Set a game rule (keep_inventory true = keep items on death; advance_time false = freeze time; mob_griefing false = no creeper damage). Blank value queries it.',
     fields: [
       { key: 'rule', label: 'rule', type: 'choice', choices: 'gamerules', required: true, placeholder: 'keep_inventory' },
@@ -160,6 +174,7 @@ export const QUICK_COMMANDS = [
     name: 'difficulty',
     label: 'Difficulty',
     desc: 'Set the server difficulty.',
+    scope: 'global',
     fields: [
       { key: 'level', label: 'level', type: 'select', options: ['peaceful', 'easy', 'normal', 'hard'], required: true },
     ],
@@ -169,6 +184,8 @@ export const QUICK_COMMANDS = [
     name: 'effect',
     label: 'Apply effect',
     desc: 'Give a player a status effect (seconds default 30 if only an amplifier is set).',
+    scope: 'player',
+    playerField: 'player',
     fields: [
       { key: 'player', label: 'player', type: 'player', required: true },
       { key: 'effect', label: 'effect', type: 'choice', choices: 'effects', required: true, placeholder: 'speed' },
@@ -187,6 +204,8 @@ export const QUICK_COMMANDS = [
     name: 'clear',
     label: 'Clear inventory',
     desc: 'Clear a player’s inventory — everything, or only a given item.',
+    scope: 'player',
+    playerField: 'player',
     confirm: a => `Clear ${a.item || 'the ENTIRE inventory'} from ${a.player}?`,
     fields: [
       { key: 'player', label: 'player', type: 'player', required: true },
@@ -199,6 +218,8 @@ export const QUICK_COMMANDS = [
     name: 'kill',
     label: 'Kill',
     desc: 'Kill players or entities. @e[type=!player] = every non-player entity (mobs, but also dropped items etc).',
+    scope: 'player',
+    playerField: 'target',
     confirm: a => `Kill ${a.target}?`,
     fields: [
       { key: 'target', label: 'target', type: 'player', required: true, placeholder: '@e[type=!player]' },
@@ -209,6 +230,9 @@ export const QUICK_COMMANDS = [
     name: 'summon',
     label: 'Summon',
     desc: 'Spawn an entity at a player or at coordinates (RCON has no “here”).',
+    scope: 'player',
+    playerField: 'at',
+    cardHide: ['pos'], // a card always summons at its player
     fields: [
       { key: 'entity', label: 'entity', type: 'choice', choices: 'entities', required: true, placeholder: 'zombie' },
       { key: 'at', label: 'at player', type: 'player' },
@@ -223,6 +247,8 @@ export const QUICK_COMMANDS = [
     name: 'msg',
     label: 'Private message',
     desc: 'Send a private message to a player (appears as a whisper from Server).',
+    scope: 'player',
+    playerField: 'player',
     fields: [
       { key: 'player', label: 'player', type: 'player', required: true },
       { key: 'message', label: 'message', type: 'text', required: true },
@@ -233,6 +259,8 @@ export const QUICK_COMMANDS = [
     name: 'experience',
     label: 'Give XP',
     desc: 'Add experience — raw points or whole levels.',
+    scope: 'player',
+    playerField: 'player',
     fields: [
       { key: 'player', label: 'player', type: 'player', required: true },
       { key: 'amount', label: 'amount', type: 'number', required: true },

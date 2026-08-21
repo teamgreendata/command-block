@@ -75,6 +75,26 @@ test('choice fields reference real suggestion lists', () => {
   }
 });
 
+test('scopes split 9 player / 4 global, with valid card wiring', () => {
+  const counts = { player: 0, global: 0 };
+  for (const c of QUICK_COMMANDS) {
+    assert.ok(c.scope === 'player' || c.scope === 'global', `${c.name} scope`);
+    counts[c.scope]++;
+    if (c.scope === 'player') {
+      // the card auto-fills and hides this field — it must exist
+      assert.ok(c.fields.some(f => f.key === c.playerField), `${c.name} playerField`);
+      for (const h of c.cardHide || []) {
+        assert.ok(c.fields.some(f => f.key === h), `${c.name} cardHide ${h}`);
+      }
+    } else {
+      assert.equal(c.playerField, undefined, c.name);
+      assert.ok(!c.fields.some(f => f.type === 'player'), `${c.name}: global command with a player field`);
+    }
+  }
+  assert.equal(counts.player, 9);
+  assert.equal(counts.global, 4);
+});
+
 test('presets are well-formed and kill-all is confirm-gated', () => {
   for (const p of PRESETS) assert.ok(p.label && p.command, p.label);
   assert.ok(PRESETS.find(p => p.command === 'kill @e[type=!player]').confirm);

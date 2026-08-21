@@ -12,75 +12,100 @@
   <h1>command-block</h1>
   <span id="msg" hidden></span>
 </header>
+
+<nav id="tabs">
+  <button type="button" class="tab" data-tab="dashboard">Dashboard</button>
+  <button type="button" class="tab" data-tab="console">Console</button>
+  <button type="button" class="tab" data-tab="whitelist">Whitelist</button>
+  <button type="button" class="tab" data-tab="logs">Logs</button>
+</nav>
+
 <main>
 
-  <section class="panel" id="status-panel">
-    <h2>Server</h2>
-    <div class="status-row">
-      <span id="status-dot" class="dot"></span>
-      <span id="status-text">checking…</span>
-    </div>
-    <dl class="facts">
-      <dt>Players</dt><dd id="st-players">–</dd>
-      <dt>Version</dt><dd id="st-version">–</dd>
-      <dt>MOTD</dt><dd id="st-motd">–</dd>
-      <dt>Latency</dt><dd id="st-latency">–</dd>
-      <dt>TPS</dt><dd id="st-tps">–</dd>
-    </dl>
-    <div class="actions">
-      <button id="btn-save" type="button">Save world</button>
-      <button id="btn-restart" type="button" class="danger">Restart</button>
-    </div>
-  </section>
+  <section class="tab-page" id="page-dashboard">
 
-  <section class="panel" id="players-panel">
-    <h2>Players &amp; whitelist</h2>
-    <h3>Online</h3>
-    <ul id="online-list" class="rows"><li class="empty">–</li></ul>
-    <h3>Whitelist</h3>
-    <ul id="whitelist-list" class="rows"><li class="empty">–</li></ul>
-    <form id="whitelist-form" autocomplete="off">
-      <input id="whitelist-name" placeholder="player name" maxlength="16">
-      <button>Add</button>
-    </form>
-    <h3>Broadcast</h3>
-    <form id="broadcast-form" autocomplete="off">
-      <input id="broadcast-msg" placeholder="message to everyone online">
-      <button>Say</button>
-    </form>
-  </section>
-
-  <section class="panel" id="quick-panel">
-    <h2>Quick commands</h2>
-    <div id="preset-row" class="preset-row"></div>
-    <form id="quick-form" autocomplete="off">
-      <div class="quick-top">
-        <select id="quick-cmd"></select>
-        <button>Send</button>
+    <section class="panel" id="status-panel">
+      <h2>Server</h2>
+      <div class="status-row">
+        <span id="status-dot" class="dot"></span>
+        <span id="status-text">checking…</span>
       </div>
-      <div id="quick-fields" class="quick-fields"></div>
-      <p id="quick-desc" class="quick-desc"></p>
-    </form>
+      <dl class="facts">
+        <dt>Players</dt><dd id="st-players">–</dd>
+        <dt>Version</dt><dd id="st-version">–</dd>
+        <dt>MOTD</dt><dd id="st-motd">–</dd>
+        <dt>Latency</dt><dd id="st-latency">–</dd>
+        <dt>TPS</dt><dd id="st-tps">–</dd>
+      </dl>
+      <div class="actions">
+        <button id="btn-save" type="button">Save world</button>
+        <button id="btn-restart" type="button" class="danger">Restart</button>
+      </div>
+    </section>
+
+    <section class="panel" id="global-panel">
+      <h2>Global commands</h2>
+      <div id="preset-row" class="preset-row"></div>
+      <form id="quick-form" autocomplete="off">
+        <div class="quick-top">
+          <select id="quick-cmd"></select>
+          <button>Send</button>
+        </div>
+        <div id="quick-fields" class="quick-fields"></div>
+        <p id="quick-desc" class="quick-desc"></p>
+      </form>
+      <h3>Broadcast</h3>
+      <form id="broadcast-form" autocomplete="off">
+        <input id="broadcast-msg" placeholder="message to everyone online">
+        <button>Say</button>
+      </form>
+    </section>
+
+    <section class="panel" id="players-panel">
+      <h2>Players</h2>
+      <div id="player-cards" class="player-cards"></div>
+    </section>
+
   </section>
 
-  <section class="panel" id="console-panel">
-    <h2>Console</h2>
-    <pre id="console-out" class="scrollback"></pre>
-    <form id="console-form" autocomplete="off">
-      <span class="prompt">/</span>
-      <input id="console-in" spellcheck="false" placeholder="command (up-arrow for history)">
-      <button>Send</button>
-    </form>
+  <section class="tab-page" id="page-console">
+    <section class="panel" id="console-panel">
+      <h2>Console</h2>
+      <pre id="console-out" class="scrollback"></pre>
+      <form id="console-form" autocomplete="off">
+        <span class="prompt">/</span>
+        <input id="console-in" spellcheck="false" placeholder="command (up-arrow for history)">
+        <button>Send</button>
+      </form>
+    </section>
   </section>
 
-  <section class="panel" id="logs-panel">
-    <h2>Logs
-      <span class="h2-tools">
-        <label><input type="checkbox" id="logs-auto"> auto</label>
-        <button id="logs-refresh" type="button">refresh</button>
-      </span>
-    </h2>
-    <pre id="logs-out" class="scrollback"></pre>
+  <section class="tab-page" id="page-whitelist">
+    <section class="panel" id="whitelist-panel">
+      <h2>Whitelist</h2>
+      <ul id="whitelist-list" class="rows"><li class="empty">–</li></ul>
+      <form id="whitelist-form" autocomplete="off">
+        <input id="whitelist-name" placeholder="player name" maxlength="16">
+        <button>Add</button>
+      </form>
+      <h3>Pardon (unban)</h3>
+      <form id="pardon-form" autocomplete="off">
+        <input id="pardon-name" placeholder="player name" maxlength="16">
+        <button>Pardon</button>
+      </form>
+    </section>
+  </section>
+
+  <section class="tab-page" id="page-logs">
+    <section class="panel" id="logs-panel">
+      <h2>Logs
+        <span class="h2-tools">
+          <label><input type="checkbox" id="logs-auto"> auto</label>
+          <button id="logs-refresh" type="button">refresh</button>
+        </span>
+      </h2>
+      <pre id="logs-out" class="scrollback"></pre>
+    </section>
   </section>
 
 </main>

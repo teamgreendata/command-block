@@ -3,6 +3,11 @@ import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick } from '.
 const $ = s => document.querySelector(s);
 const stripCodes = s => String(s).replace(/§./g, '');
 
+const GLOBAL_COMMANDS = QUICK_COMMANDS.filter(c => c.scope === 'global');
+// Card action order: the common stuff first, destructive last.
+const CARD_ORDER = ['tp', 'give', 'effect', 'gamemode', 'experience', 'msg', 'summon', 'clear', 'kill'];
+const CARD_COMMANDS = CARD_ORDER.map(findCommand).filter(Boolean);
+
 let restarting = false;
 let statusTimer = null;
 let logsTimer = null;
@@ -61,7 +66,26 @@ function fillList(ul, items, emptyText) {
   for (const item of items) ul.appendChild(item);
 }
 
-// ---------------------------------------------------------------- status card
+// ---------------------------------------------------------------- tabs
+
+const TABS = ['dashboard', 'console', 'whitelist', 'logs'];
+
+function showTab(name) {
+  if (!TABS.includes(name)) name = 'dashboard';
+  for (const t of TABS) {
+    document.getElementById(`page-${t}`).classList.toggle('active', t === name);
+  }
+  for (const b of document.querySelectorAll('#tabs .tab')) {
+    b.classList.toggle('active', b.dataset.tab === name);
+  }
+}
+
+for (const b of document.querySelectorAll('#tabs .tab')) {
+  b.addEventListener('click', () => { location.hash = b.dataset.tab; });
+}
+window.addEventListener('hashchange', () => showTab(location.hash.slice(1)));
+
+// ---------------------------------------------------------------- status
 
 async function refreshStatus() {
   try {
@@ -89,6 +113,8 @@ async function refreshStatus() {
       for (const id of ['st-players', 'st-version', 'st-motd', 'st-latency', 'st-tps']) {
         $('#' + id).textContent = '–';
       }
+      lastOnline = [];
+      renderCards();
     }
   } catch {
     $('#status-dot').className = 'dot';
@@ -107,32 +133,34 @@ async function refreshTps() {
   } catch { $('#st-tps').textContent = '–'; }
 }
 
-// ---------------------------------------------------------------- players & whitelist
+// ---------------------------------------------------------------- player data
+
+let lastOnline = [];
+let whitelistNames = [];
 
 async function refreshPlayers() {
-  const ul = $('#online-list');
   try {
     const p = await api('/api/players');
+    lastOnline = p.players;
     updatePlayerDatalist(p.players);
-    fillList(ul, p.players.map(name => row(name, [
-      ['kick', 'small', () => kick(name)],
-      ['ban', 'small danger', () => ban(name)],
-    ])), 'nobody online');
   } catch {
-    fillList(ul, [], '– rcon unavailable');
+    lastOnline = [];
   }
+  renderCards();
 }
 
 async function refreshWhitelist() {
   const ul = $('#whitelist-list');
   try {
     const w = await api('/api/whitelist');
+    whitelistNames = w.players;
     fillList(ul, w.players.map(name => row(name, [
       ['remove', 'small', () => whitelistRemove(name)],
     ])), 'whitelist is empty');
   } catch {
     fillList(ul, [], '– rcon unavailable');
   }
+  renderCards();
 }
 
 async function kick(name) {
@@ -173,6 +201,17 @@ $('#whitelist-form').addEventListener('submit', async e => {
   refreshWhitelist();
 });
 
+$('#pardon-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('#pardon-name').value.trim();
+  if (!name) return;
+  try {
+    const r = await api('/api/pardon', { name });
+    flash(stripCodes(r.raw) || `Pardoned ${name}.`);
+    $('#pardon-name').value = '';
+  } catch (err) { flash(err.message, true); }
+});
+
 $('#broadcast-form').addEventListener('submit', async e => {
   e.preventDefault();
   const message = $('#broadcast-msg').value.trim();
@@ -183,6 +222,120 @@ $('#broadcast-form').addEventListener('submit', async e => {
     $('#broadcast-msg').value = '';
   } catch (err) { flash(err.message, true); }
 });
+
+// ---------------------------------------------------------------- player cards
+
+// Pixel-face placeholder for when the avatar proxy has nothing (offline,
+// disabled, or an unknown name) — keeps the frontend free of external requests.
+const FALLBACK_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%23b6896c'/%3E%3Crect width='8' height='2' fill='%232a1f0e'/%3E%3Crect x='1' y='4' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='2' y='4' width='1' height='1' fill='%234a3bb3'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%234a3bb3'/%3E%3Crect x='6' y='4' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='3' y='5' width='2' height='1' fill='%238a613f'/%3E%3Crect x='3' y='6' width='2' height='1' fill='%235a3d28'/%3E%3C/svg%3E";
+
+let cardsKey = null; // change detection so open card forms aren't clobbered
+
+function renderCards() {
+  const online = new Set(lastOnline);
+  const names = [...new Set([...whitelistNames, ...lastOnline])];
+  names.sort((a, b) => (online.has(b) - online.has(a)) || a.localeCompare(b));
+  const key = names.map(n => `${n}:${online.has(n) ? 1 : 0}`).join(',');
+  if (key === cardsKey) return;
+  cardsKey = key;
+  const wrap = $('#player-cards');
+  wrap.replaceChildren();
+  if (!names.length) {
+    const p = document.createElement('p');
+    p.className = 'empty';
+    p.textContent = 'nobody on the whitelist yet — add players on the Whitelist tab';
+    wrap.appendChild(p);
+    return;
+  }
+  for (const name of names) wrap.appendChild(playerCard(name, online.has(name)));
+}
+
+function playerCard(name, isOnline) {
+  const card = document.createElement('div');
+  card.className = 'player-card';
+
+  const head = document.createElement('div');
+  head.className = 'pc-head';
+  const img = document.createElement('img');
+  img.className = 'avatar';
+  img.alt = '';
+  img.width = 64;
+  img.height = 64;
+  img.src = `/api/avatar/${name}`;
+  img.addEventListener('error', () => { img.src = FALLBACK_AVATAR; }, { once: true });
+  head.appendChild(img);
+
+  const id = document.createElement('div');
+  id.className = 'pc-id';
+  const nm = document.createElement('div');
+  nm.className = 'pc-name';
+  nm.textContent = name;
+  const state = document.createElement('div');
+  state.className = 'pc-state';
+  const dot = document.createElement('span');
+  dot.className = isOnline ? 'dot online' : 'dot';
+  state.appendChild(dot);
+  state.appendChild(document.createTextNode(isOnline ? ' online' : ' offline'));
+  id.appendChild(nm);
+  id.appendChild(state);
+
+  const mod = document.createElement('div');
+  mod.className = 'pc-mod';
+  const kickBtn = document.createElement('button');
+  kickBtn.type = 'button';
+  kickBtn.className = 'small';
+  kickBtn.textContent = 'kick';
+  kickBtn.disabled = !isOnline;
+  kickBtn.addEventListener('click', () => kick(name));
+  const banBtn = document.createElement('button');
+  banBtn.type = 'button';
+  banBtn.className = 'small danger';
+  banBtn.textContent = 'ban';
+  banBtn.addEventListener('click', () => ban(name));
+  mod.appendChild(kickBtn);
+  mod.appendChild(banBtn);
+  id.appendChild(mod);
+  head.appendChild(id);
+  card.appendChild(head);
+
+  const form = document.createElement('form');
+  form.autocomplete = 'off';
+  form.className = 'pc-form';
+  const top = document.createElement('div');
+  top.className = 'quick-top';
+  const sel = document.createElement('select');
+  for (const c of CARD_COMMANDS) {
+    const o = document.createElement('option');
+    o.value = c.name;
+    o.textContent = c.label;
+    sel.appendChild(o);
+  }
+  const send = document.createElement('button');
+  send.textContent = 'Send';
+  top.appendChild(sel);
+  top.appendChild(send);
+  form.appendChild(top);
+  const fields = document.createElement('div');
+  fields.className = 'quick-fields';
+  form.appendChild(fields);
+
+  const cardSkip = cmd => [cmd.playerField, ...(cmd.cardHide || [])];
+  sel.addEventListener('change', () => renderFields(fields, findCommand(sel.value), cardSkip(findCommand(sel.value))));
+  renderFields(fields, CARD_COMMANDS[0], cardSkip(CARD_COMMANDS[0]));
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const cmd = findCommand(sel.value);
+    const values = collectValues(fields);
+    values[cmd.playerField] = name;
+    const built = buildQuick(cmd, values);
+    if (built.error) { flash(built.error, true); return; }
+    sendRaw(built.command, cmd.confirm ? cmd.confirm(built.args) : null);
+  });
+
+  card.appendChild(form);
+  return card;
+}
 
 // ---------------------------------------------------------------- restart
 
@@ -227,8 +380,8 @@ function consoleLine(cmd, response, isError) {
   out.scrollTop = out.scrollHeight;
 }
 
-// Single send path for the console and the quick panel: history, confirm,
-// API call, scrollback.
+// Single send path for the console, the global panel and the player cards:
+// history, confirm, API call, scrollback.
 async function sendRaw(command, confirmText) {
   if (confirmText && !confirm(confirmText)) return;
   history.push(command);
@@ -268,7 +421,7 @@ $('#console-in').addEventListener('keydown', e => {
   }
 });
 
-// ---------------------------------------------------------------- quick commands
+// ---------------------------------------------------------------- command forms
 
 function ensureDatalist(id, values) {
   let dl = document.getElementById(id);
@@ -290,10 +443,13 @@ function updatePlayerDatalist(names) {
 
 const CUSTOM = '__custom__';
 
-function renderQuickFields(cmd) {
-  const wrap = $('#quick-fields');
+// Renders a command's argument fields into `wrap`, skipping keys in `skip`
+// (cards use that to hide the auto-filled player arg). Shared by the global
+// panel and every player card.
+function renderFields(wrap, cmd, skip = []) {
   wrap.replaceChildren();
   for (const f of cmd.fields) {
+    if (skip.includes(f.key)) continue;
     const div = document.createElement('div');
     div.className = 'qf';
     const label = document.createElement('label');
@@ -351,31 +507,43 @@ function renderQuickFields(cmd) {
     }
     wrap.appendChild(div);
   }
-  $('#quick-desc').textContent = cmd.desc;
 }
 
+// Collects {key: value} from a fields container, resolving the Custom… escape.
+function collectValues(wrap) {
+  const values = {};
+  for (const el of wrap.querySelectorAll('[data-key]')) {
+    let v = el.value;
+    if (v === CUSTOM) {
+      const custom = wrap.querySelector(`[data-custom-for="${el.dataset.key}"]`);
+      v = custom ? custom.value : '';
+    }
+    values[el.dataset.key] = v;
+  }
+  return values;
+}
+
+// ---------------------------------------------------------------- global panel
+
 const quickSelect = $('#quick-cmd');
-for (const c of QUICK_COMMANDS) {
+for (const c of GLOBAL_COMMANDS) {
   const o = document.createElement('option');
   o.value = c.name;
   o.textContent = c.label;
   quickSelect.appendChild(o);
 }
-quickSelect.addEventListener('change', () => renderQuickFields(findCommand(quickSelect.value)));
+
+function renderGlobalFields(cmd) {
+  renderFields($('#quick-fields'), cmd);
+  $('#quick-desc').textContent = cmd.desc;
+}
+
+quickSelect.addEventListener('change', () => renderGlobalFields(findCommand(quickSelect.value)));
 
 $('#quick-form').addEventListener('submit', e => {
   e.preventDefault();
   const cmd = findCommand(quickSelect.value);
-  const values = {};
-  for (const el of $('#quick-fields').querySelectorAll('[data-key]')) {
-    let v = el.value;
-    if (v === CUSTOM) {
-      const custom = $('#quick-fields').querySelector(`[data-custom-for="${el.dataset.key}"]`);
-      v = custom ? custom.value : '';
-    }
-    values[el.dataset.key] = v;
-  }
-  const built = buildQuick(cmd, values);
+  const built = buildQuick(cmd, collectValues($('#quick-fields')));
   if (built.error) { flash(built.error, true); return; }
   sendRaw(built.command, cmd.confirm ? cmd.confirm(built.args) : null);
 });
@@ -408,8 +576,10 @@ $('#logs-auto').addEventListener('change', e => {
 
 // ---------------------------------------------------------------- boot
 
+showTab(location.hash.slice(1));
 updatePlayerDatalist([]);
-renderQuickFields(QUICK_COMMANDS[0]);
+renderGlobalFields(GLOBAL_COMMANDS[0]);
+renderCards();
 refreshStatus();
 refreshWhitelist();
 refreshLogs();

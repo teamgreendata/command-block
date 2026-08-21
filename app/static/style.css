@@ -65,15 +65,44 @@ header h1::before {
 #msg { font-size: 0.85rem; color: #fff; text-shadow: 2px 2px 0 #3f3f3f; }
 #msg.error { color: var(--red); }
 
+/* Creative-inventory-style tab bar: the active tab comes forward in panel gray */
+#tabs {
+  display: flex;
+  gap: 0.35rem;
+  align-items: flex-end;
+  padding: 0.3rem 1.2rem 0;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+#tabs .tab {
+  background: #6f6f6f;
+  padding: 0.35rem 1rem;
+}
+#tabs .tab.active {
+  background: var(--panel);
+  color: var(--ink);
+  text-shadow: none;
+  box-shadow: inset 2px 2px 0 var(--bevel-light), inset -2px -2px 0 #9c9c9c;
+  padding: 0.5rem 1rem 0.45rem;
+}
+
 main {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
-  gap: 1rem;
   padding: 0.6rem 1.2rem 1.2rem;
   max-width: 1200px;
   margin: 0 auto;
 }
-@media (max-width: 750px) { main { grid-template-columns: 1fr; } }
+
+.tab-page { display: none; }
+.tab-page.active {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+  gap: 1rem;
+}
+/* single-panel tabs */
+#page-console.active, #page-whitelist.active, #page-logs.active { grid-template-columns: 1fr; }
+@media (max-width: 750px) { .tab-page.active { grid-template-columns: 1fr; } }
 
 /* Inventory-window panel: black outline, light top-left bevel, dark bottom-right */
 .panel {
@@ -197,7 +226,47 @@ select:focus { outline: none; border-color: #fff; }
 .qf { display: flex; flex-direction: column; gap: 0.2rem; flex: 1 1 8.5rem; min-width: 0; }
 .qf label { font-size: 0.7rem; color: var(--ink); }
 .quick-desc { margin: 0; color: var(--dim); font-size: 0.78rem; }
-#logs-panel { grid-column: 1 / -1; }
+.empty { color: var(--dim); }
+#players-panel { grid-column: 1 / -1; min-height: 0; }
+
+/* Player cards: inventory-slot look (inset bevel) inside the Players panel */
+.player-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.8rem;
+}
+.player-card {
+  background: #8b8b8b;
+  box-shadow: inset 2px 2px 0 #373737, inset -2px -2px 0 #ffffff;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.pc-head { display: flex; gap: 0.7rem; align-items: flex-start; }
+.avatar {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  border: 2px solid #000;
+  background: #6f6f6f;
+  image-rendering: pixelated;
+}
+.pc-id { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.pc-name {
+  color: #fff;
+  text-shadow: 2px 2px 0 #3f3f3f;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+.pc-state { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: #2f2f2f; }
+.pc-state .dot { width: 0.6rem; height: 0.6rem; }
+.pc-state .dot:not(.online) { background: #4f4f4f; } /* offline: visible against the slot gray */
+.pc-mod { display: flex; gap: 0.4rem; margin-top: 0.15rem; }
+.pc-form { flex-direction: column; align-items: stretch; gap: 0.5rem; margin-top: auto; }
+.pc-form .quick-top select { flex: 1; }
+.pc-form .qf { flex: 1 1 6.5rem; }
+.pc-form .qf label { color: #2f2f2f; }
 
 /* Chat-window scrollback: white text on black, gold for sent commands */
 .scrollback {

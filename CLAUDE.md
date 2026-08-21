@@ -30,15 +30,16 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 34 tests, no network, no MC server
-node --test                                   # frontend command builders: 29 tests (bare, not `node --test tests/`)
+.venv/bin/python -m pytest                    # backend: 38 tests, no network, no MC server
+node --test                                   # frontend command builders: 30 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
 ```
 
 Config is env-only: `RCON_HOST/PORT/PASSWORD`, `DASH_PORT`, optional `DASH_USER`/`DASH_PASS`
 (both set = HTTP Basic auth on everything except `/healthz`). `LOG_FILE` overrides the log
-path (`/mc-logs/latest.log` in-container) — used by tests and local runs only.
+path (`/mc-logs/latest.log` in-container) — used by tests and local runs only. `AVATAR_URL`
+overrides the player-head source template (set empty to disable avatar fetching).
 
 ## Gotchas & conventions
 
@@ -64,11 +65,23 @@ path (`/mc-logs/latest.log` in-container) — used by tests and local runs only.
   commands — keep that gate on any new endpoint that takes a name.
 - The RCON password lives in two `.env` files (minecraft's and this one's) — one
   Vaultwarden entry covers both.
-- Frontend is deliberately framework-free with zero external requests: the favicon and
-  dirt-texture background are data URIs, and the Minecraft-style pixel font is **vendored**
-  (`app/static/monocraft.ttf`, Monocraft, SIL OFL 1.1 — license alongside). Keep it that
-  way. It's ES modules (`app.js` imports `quick-commands.js`) — keep new frontend logic
-  that builds strings DOM-free in `quick-commands.js` so `node --test` can cover it.
+- Frontend is deliberately framework-free with zero external requests: the favicon,
+  dirt-texture background and fallback avatar are data URIs, and the Minecraft-style pixel
+  font is **vendored** (`app/static/monocraft.ttf`, Monocraft, SIL OFL 1.1 — license
+  alongside). Keep it that way. It's ES modules (`app.js` imports `quick-commands.js`) —
+  keep new frontend logic that builds strings DOM-free in `quick-commands.js` so
+  `node --test` can cover it.
+- **`GET /api/avatar/{name}` is the project's one backend-outbound internet call**: it
+  proxies player heads from mc-heads.net (by name) with an in-memory cache (6h, failures
+  10min) so the browser stays LAN-only. `AVATAR_URL=` (empty) disables it; on 404 the
+  frontend swaps in a built-in pixel-face placeholder. Don't add other outbound calls
+  without the same cache + kill-switch treatment.
+- UI structure: four hash-routed tabs — **Dashboard** (status + Global commands panel +
+  a card per whitelisted/online player), **Console**, **Whitelist**, **Logs**. The card vs
+  global split is data-driven: each command in `quick-commands.js` carries
+  `scope: 'player'|'global'`, and player commands name their `playerField`, which cards
+  auto-fill with the card's player and hide (`cardHide` drops extra fields, e.g. summon's
+  coords). Add a new command there and the right UI renders it automatically.
 - The UI is Minecraft-GUI themed by design (`style.css`): inventory-gray beveled panels,
   stone buttons, black edit boxes, MC chat colors (`#55FF55`/`#FF5555`/`#FFAA00`) — stay
   in that visual language for new UI.

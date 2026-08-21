@@ -153,3 +153,56 @@ def test_tps_endpoint_parses(client, monkeypatch):
     monkeypatch.setattr(main, "rcon_command", fake)
     r = client.get("/api/tps")
     assert r.json()["tps_1m"] == 20.0
+
+
+@pytest.fixture
+def avatar_fetches(monkeypatch):
+    main._avatar_cache.clear()
+    calls = []
+
+    def fake(url):
+        calls.append(url)
+        return b"png-bytes"
+
+    monkeypatch.setattr(main, "fetch_avatar", fake)
+    monkeypatch.delenv("AVATAR_URL", raising=False)
+    yield calls
+    main._avatar_cache.clear()
+
+
+def test_avatar_proxies_and_caches(client, avatar_fetches):
+    r = client.get("/api/avatar/alice")
+    assert r.status_code == 200
+    assert r.content == b"png-bytes"
+    assert r.headers["content-type"] == "image/png"
+    assert "max-age" in r.headers["cache-control"]
+    client.get("/api/avatar/alice")  # second hit comes from the cache
+    assert avatar_fetches == ["https://mc-heads.net/avatar/alice/64"]
+
+
+def test_avatar_rejects_bad_names(client, avatar_fetches):
+    assert client.get("/api/avatar/bad%20name").status_code == 400
+    assert client.get("/api/avatar/" + "x" * 17).status_code == 400
+    assert avatar_fetches == []
+
+
+def test_avatar_failure_is_404_and_negative_cached(client, monkeypatch):
+    main._avatar_cache.clear()
+    monkeypatch.delenv("AVATAR_URL", raising=False)
+    calls = []
+
+    def boom(url):
+        calls.append(url)
+        raise OSError("no internet")
+
+    monkeypatch.setattr(main, "fetch_avatar", boom)
+    assert client.get("/api/avatar/alice").status_code == 404
+    assert client.get("/api/avatar/alice").status_code == 404
+    assert len(calls) == 1  # failures are negative-cached, not hammered
+    main._avatar_cache.clear()
+
+
+def test_avatar_disabled_via_empty_env(client, monkeypatch, avatar_fetches):
+    monkeypatch.setenv("AVATAR_URL", "")
+    assert client.get("/api/avatar/alice").status_code == 404
+    assert avatar_fetches == []

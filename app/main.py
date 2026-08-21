@@ -4,10 +4,13 @@ No Docker socket, no state, no database. Everything is RCON plus a
 read-only log mount; config comes from the environment only.
 """
 
+import asyncio
 import base64
 import os
 import re
 import secrets
+import time
+import urllib.request
 from collections import deque
 from pathlib import Path
 from typing import Literal
@@ -260,6 +263,55 @@ async def logs(lines: int = Query(100, ge=1)):
 @app.get("/api/tps")
 async def tps():
     return parse_tps(await rcon_command("tps"))
+
+
+# ---------------------------------------------------------------- avatars
+
+# The one backend-outbound internet call in the project: player heads for the
+# dashboard cards, proxied so the browser still only ever talks to command-block.
+# AVATAR_URL env overrides the template; set it empty to disable fetching
+# entirely (the frontend falls back to a built-in placeholder face on 404).
+AVATAR_DEFAULT_URL = "https://mc-heads.net/avatar/{name}/64"
+AVATAR_TTL = 6 * 3600
+AVATAR_NEG_TTL = 600  # failed lookups retry after 10 minutes
+_avatar_cache: dict[str, tuple[bytes | None, float]] = {}
+
+
+def fetch_avatar(url: str) -> bytes:
+    # module-level (and sync, run via to_thread) so tests can monkeypatch it
+    with urllib.request.urlopen(url, timeout=4) as resp:
+        return resp.read()
+
+
+def _avatar_reply(data: bytes | None) -> Response:
+    if data is None:
+        return JSONResponse(status_code=404, content={"error": "Avatar unavailable."})
+    return Response(
+        content=data,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/api/avatar/{name}")
+async def avatar(name: str):
+    if not _NAME_RE.match(name):
+        return _bad_request("Invalid player name (letters, digits, underscore; max 16).")
+    template = _env("AVATAR_URL", AVATAR_DEFAULT_URL)
+    if not template:
+        return _avatar_reply(None)
+    cached = _avatar_cache.get(name)
+    if cached:
+        data, fetched_at = cached
+        ttl = AVATAR_TTL if data is not None else AVATAR_NEG_TTL
+        if time.monotonic() - fetched_at < ttl:
+            return _avatar_reply(data)
+    try:
+        data = await asyncio.to_thread(fetch_avatar, template.format(name=name))
+    except Exception:
+        data = None
+    _avatar_cache[name] = (data, time.monotonic())
+    return _avatar_reply(data)
 
 
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
