@@ -349,6 +349,18 @@ def test_playerstats_supports_legacy_play_time_key(client, mc_data):
     assert r.json()["players"]["bob"]["hours"] == 1.0
 
 
+def test_playerstats_whitelist_json_covers_expired_usercache(client, mc_data):
+    # usercache entries expire ~30 days after last join; whitelist.json never
+    # does — a whitelisted player absent from usercache must still get stats
+    uuid_c = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    (mc_data / "whitelist.json").write_text(json.dumps([{"uuid": uuid_c, "name": "carol"}]))
+    (mc_data / "world" / "stats" / f"{uuid_c}.json").write_text(json.dumps(
+        {"stats": {"minecraft:custom": {"minecraft:play_time": 720000}}}))  # 10h lifetime
+    r = client.get("/api/playerstats")
+    assert r.json()["players"]["carol"]["hours"] == 10.0
+    assert r.json()["players"]["alice"]["hours"] == 2.0  # usercache entries still work
+
+
 def test_playerstats_modern_players_layout(client, tmp_path, monkeypatch):
     # this MC generation nests everything under world/players/{data,stats}
     # (verified against a live Paper 26.2 world) — the classic layout in the

@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 50 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 51 tests, no network, no MC server
 node --test                                   # frontend command builders: 31 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -96,8 +96,9 @@ template (set empty to disable avatar fetching).
   `world/players/{stats,data}/` — the classic `world/{stats,playerdata}/` is also
   supported, and the world folder name is auto-detected. These files only update on
   save/logout/autosave, so a currently online player's hours lag a few minutes — the UI
-  shows "now" for their last-seen. Players absent from `usercache.json` (roughly a month
-  since last join) show no stats until they rejoin.
+  shows "now" for their last-seen. Name→UUID mapping merges `usercache.json` (expires
+  ~30 days after last join) with `whitelist.json` (permanent), so whitelisted players
+  keep lifetime stats no matter how long they've been away.
 - **Waypoints are the one piece of dashboard state**: `waypoints.json` in the `cb_data`
   named volume (`CB_DATA` overrides the dir for tests; the Dockerfile pre-creates
   `/cb-data` owned by `dash` so the volume inherits writable ownership). CRUD via

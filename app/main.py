@@ -387,18 +387,38 @@ def _player_dirs(data: Path) -> tuple[Path, Path] | None:
     return world / "stats", world / "playerdata"
 
 
+def _name_uuid_pairs(data: Path) -> list[tuple[str, str]] | None:
+    """Merge usercache.json (entries expire ~30 days after a player's last
+    join) with whitelist.json (permanent) so long-absent whitelisted players
+    keep their lifetime stats. Returns None only if neither file is readable."""
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    found = False
+    for fname in ("usercache.json", "whitelist.json"):
+        try:
+            entries = json.loads((data / fname).read_text())
+        except (OSError, ValueError):
+            continue
+        found = True
+        for entry in entries:
+            name, uuid = entry.get("name"), entry.get("uuid")
+            if name and uuid and name.lower() not in seen:
+                seen.add(name.lower())
+                pairs.append((name, uuid))
+    return pairs if found else None
+
+
 @app.get("/api/playerstats")
 async def playerstats():
     data = _data_dir()
-    try:
-        cache = json.loads((data / "usercache.json").read_text())
-    except (OSError, ValueError):
-        return {"players": {}, "error": f"usercache.json not readable under {data}."}
+    pairs = _name_uuid_pairs(data)
+    if pairs is None:
+        return {"players": {},
+                "error": f"Neither usercache.json nor whitelist.json readable under {data}."}
     dirs = _player_dirs(data)
     players: dict[str, dict] = {}
-    for entry in cache:
-        name, uuid = entry.get("name"), entry.get("uuid")
-        if not name or not uuid or dirs is None:
+    for name, uuid in pairs:
+        if dirs is None:
             continue
         stats_dir, playerdata_dir = dirs
         info: dict = {"last_seen": None, "hours": None}
