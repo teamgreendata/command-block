@@ -115,6 +115,7 @@ async function refreshStatus() {
       }
       lastOnline = [];
       renderCards();
+      refreshPlayerStats(); // file-based — works even with the server down
     }
   } catch {
     $('#status-dot').className = 'dot';
@@ -137,6 +138,7 @@ async function refreshTps() {
 
 let lastOnline = [];
 let whitelistNames = [];
+let playerStats = {}; // name -> {last_seen, hours} from the mounted world files
 
 async function refreshPlayers() {
   try {
@@ -147,6 +149,39 @@ async function refreshPlayers() {
     lastOnline = [];
   }
   renderCards();
+  refreshPlayerStats();
+}
+
+async function refreshPlayerStats() {
+  try {
+    const s = await api('/api/playerstats');
+    playerStats = s.players || {};
+  } catch { /* keep the last good values */ }
+  applyStats();
+}
+
+function timeAgo(epoch) {
+  if (!epoch) return '–';
+  const s = Math.floor(Date.now() / 1000 - epoch);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? 'yesterday' : `${d} days ago`;
+}
+
+// Patch stat lines on the cards in place — cards only re-render when the
+// player/online sets change, but these numbers tick along every poll.
+function applyStats() {
+  for (const card of document.querySelectorAll('.player-card')) {
+    const st = playerStats[card.dataset.name];
+    card.querySelector('.pc-last').textContent =
+      card.dataset.online === '1' ? 'now' : timeAgo(st && st.last_seen);
+    card.querySelector('.pc-hours').textContent =
+      st && st.hours != null ? `${st.hours} h` : '–';
+  }
 }
 
 async function refreshWhitelist() {
@@ -248,11 +283,14 @@ function renderCards() {
     return;
   }
   for (const name of names) wrap.appendChild(playerCard(name, online.has(name)));
+  applyStats();
 }
 
 function playerCard(name, isOnline) {
   const card = document.createElement('div');
   card.className = 'player-card';
+  card.dataset.name = name;
+  card.dataset.online = isOnline ? '1' : '0';
 
   const head = document.createElement('div');
   head.className = 'pc-head';
@@ -278,6 +316,19 @@ function playerCard(name, isOnline) {
   state.appendChild(document.createTextNode(isOnline ? ' online' : ' offline'));
   id.appendChild(nm);
   id.appendChild(state);
+
+  const stats = document.createElement('div');
+  stats.className = 'pc-stats';
+  for (const [label, cls] of [['Last seen', 'pc-last'], ['Played', 'pc-hours']]) {
+    const k = document.createElement('span');
+    k.textContent = label;
+    const v = document.createElement('span');
+    v.className = `pc-stat-v ${cls}`;
+    v.textContent = '–';
+    stats.appendChild(k);
+    stats.appendChild(v);
+  }
+  id.appendChild(stats);
 
   const mod = document.createElement('div');
   mod.className = 'pc-mod';

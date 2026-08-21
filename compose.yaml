@@ -10,6 +10,9 @@ services:
     env_file: .env
     volumes:
       - /opt/stacks/minecraft/data/logs:/mc-logs:ro
+      # read-only, like the logs: usercache.json + world stats/playerdata feed
+      # the per-player "last seen" and "hours played" on the dashboard cards
+      - /opt/stacks/minecraft/data:/mc-data:ro
     networks:
       - mc_net
 

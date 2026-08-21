@@ -6,6 +6,7 @@ read-only log mount; config comes from the environment only.
 
 import asyncio
 import base64
+import json
 import os
 import re
 import secrets
@@ -263,6 +264,61 @@ async def logs(lines: int = Query(100, ge=1)):
 @app.get("/api/tps")
 async def tps():
     return parse_tps(await rcon_command("tps"))
+
+
+# ---------------------------------------------------------------- player stats
+
+# Served from a read-only mount of the minecraft data dir (same spectator
+# pattern as the log mount): usercache.json maps names to UUIDs, the world's
+# stats/<uuid>.json holds the play-time counter, and playerdata/<uuid>.dat's
+# mtime is the last time the server saved that player (logout or autosave).
+_PLAY_TIME_KEYS = ("minecraft:play_time", "minecraft:play_one_minute")  # modern / pre-1.17
+
+
+def _data_dir() -> Path:
+    return Path(_env("MC_DATA", "/mc-data"))
+
+
+def _world_dir(data: Path) -> Path | None:
+    # the world folder is wherever playerdata/ lives (level-name varies)
+    try:
+        for d in sorted(data.iterdir()):
+            if (d / "playerdata").is_dir():
+                return d
+    except OSError:
+        pass
+    return None
+
+
+@app.get("/api/playerstats")
+async def playerstats():
+    data = _data_dir()
+    try:
+        cache = json.loads((data / "usercache.json").read_text())
+    except (OSError, ValueError):
+        return {"players": {}, "error": f"usercache.json not readable under {data}."}
+    world = _world_dir(data)
+    players: dict[str, dict] = {}
+    for entry in cache:
+        name, uuid = entry.get("name"), entry.get("uuid")
+        if not name or not uuid or world is None:
+            continue
+        info: dict = {"last_seen": None, "hours": None}
+        try:
+            info["last_seen"] = int((world / "playerdata" / f"{uuid}.dat").stat().st_mtime)
+        except OSError:
+            pass
+        try:
+            stats = json.loads((world / "stats" / f"{uuid}.json").read_text())
+            custom = stats.get("stats", {}).get("minecraft:custom", {})
+            for key in _PLAY_TIME_KEYS:
+                if key in custom:
+                    info["hours"] = round(custom[key] / 72000, 1)  # 20 ticks/second
+                    break
+        except (OSError, ValueError):
+            pass
+        players[name] = info
+    return {"players": players}
 
 
 # ---------------------------------------------------------------- avatars

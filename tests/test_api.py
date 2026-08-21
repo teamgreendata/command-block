@@ -1,4 +1,5 @@
 import base64
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -206,3 +207,48 @@ def test_avatar_disabled_via_empty_env(client, monkeypatch, avatar_fetches):
     monkeypatch.setenv("AVATAR_URL", "")
     assert client.get("/api/avatar/alice").status_code == 404
     assert avatar_fetches == []
+
+
+UUID_A = "11111111-2222-3333-4444-555555555555"
+UUID_B = "66666666-7777-8888-9999-000000000000"
+
+
+@pytest.fixture
+def mc_data(tmp_path, monkeypatch):
+    monkeypatch.setenv("MC_DATA", str(tmp_path))
+    world = tmp_path / "world"  # any dir name works — found via playerdata/
+    (world / "playerdata").mkdir(parents=True)
+    (world / "stats").mkdir()
+    (tmp_path / "usercache.json").write_text(json.dumps([
+        {"name": "alice", "uuid": UUID_A, "expiresOn": "2026-09-01 00:00:00 +0000"},
+        {"name": "bob", "uuid": UUID_B, "expiresOn": "2026-09-01 00:00:00 +0000"},
+    ]))
+    (world / "stats" / f"{UUID_A}.json").write_text(json.dumps(
+        {"stats": {"minecraft:custom": {"minecraft:play_time": 144000}}}))  # 2h of ticks
+    (world / "playerdata" / f"{UUID_A}.dat").write_bytes(b"")
+    return tmp_path
+
+
+def test_playerstats_reads_world_files(client, mc_data):
+    r = client.get("/api/playerstats")
+    assert r.status_code == 200
+    alice = r.json()["players"]["alice"]
+    assert alice["hours"] == 2.0
+    assert isinstance(alice["last_seen"], int)  # playerdata mtime
+    # bob is in usercache but has no world files yet — present, empty stats
+    assert r.json()["players"]["bob"] == {"last_seen": None, "hours": None}
+
+
+def test_playerstats_supports_legacy_play_time_key(client, mc_data):
+    (mc_data / "world" / "stats" / f"{UUID_B}.json").write_text(json.dumps(
+        {"stats": {"minecraft:custom": {"minecraft:play_one_minute": 72000}}}))
+    r = client.get("/api/playerstats")
+    assert r.json()["players"]["bob"]["hours"] == 1.0
+
+
+def test_playerstats_missing_mount_is_graceful(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("MC_DATA", str(tmp_path / "nope"))
+    r = client.get("/api/playerstats")
+    assert r.status_code == 200
+    assert r.json()["players"] == {}
+    assert "error" in r.json()

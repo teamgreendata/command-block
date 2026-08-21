@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 38 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 41 tests, no network, no MC server
 node --test                                   # frontend command builders: 30 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -38,8 +38,9 @@ docker compose up -d --build                  # the real deployment (needs .env)
 
 Config is env-only: `RCON_HOST/PORT/PASSWORD`, `DASH_PORT`, optional `DASH_USER`/`DASH_PASS`
 (both set = HTTP Basic auth on everything except `/healthz`). `LOG_FILE` overrides the log
-path (`/mc-logs/latest.log` in-container) — used by tests and local runs only. `AVATAR_URL`
-overrides the player-head source template (set empty to disable avatar fetching).
+path (`/mc-logs/latest.log` in-container) and `MC_DATA` the data-dir mount (`/mc-data`) —
+both used by tests and local runs only. `AVATAR_URL` overrides the player-head source
+template (set empty to disable avatar fetching).
 
 ## Gotchas & conventions
 
@@ -76,6 +77,12 @@ overrides the player-head source template (set empty to disable avatar fetching)
   10min) so the browser stays LAN-only. `AVATAR_URL=` (empty) disables it; on 404 the
   frontend swaps in a built-in pixel-face placeholder. Don't add other outbound calls
   without the same cache + kill-switch treatment.
+- `GET /api/playerstats` (cards' "Last seen"/"Played") reads the **read-only data-dir
+  mount** (`/mc-data`): `usercache.json` for name→UUID, the world's `stats/<uuid>.json`
+  play-time counter (72000 ticks = 1h; legacy `play_one_minute` key also handled), and
+  `playerdata/<uuid>.dat` mtime as last-seen. The world folder is auto-detected (wherever
+  `playerdata/` lives). These files only update on save/logout/autosave, so a currently
+  online player's hours lag a few minutes — the UI shows "now" for their last-seen.
 - UI structure: four hash-routed tabs — **Dashboard** (status + Global commands panel +
   a card per whitelisted/online player), **Console**, **Whitelist**, **Logs**. The card vs
   global split is data-driven: each command in `quick-commands.js` carries

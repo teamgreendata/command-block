@@ -232,7 +232,8 @@ select:focus { outline: none; border-color: #fff; }
 /* Player cards: inventory-slot look (inset bevel) inside the Players panel */
 .player-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  /* auto-fit: with only a couple of players, the cards stretch to fill the row */
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 0.8rem;
 }
 .player-card {
@@ -262,6 +263,15 @@ select:focus { outline: none; border-color: #fff; }
 .pc-state { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: #2f2f2f; }
 .pc-state .dot { width: 0.6rem; height: 0.6rem; }
 .pc-state .dot:not(.online) { background: #4f4f4f; } /* offline: visible against the slot gray */
+.pc-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.1rem 0.6rem;
+  font-size: 0.72rem;
+  color: #2f2f2f;
+  margin-top: 0.1rem;
+}
+.pc-stat-v { color: #fff; text-shadow: 2px 2px 0 #3f3f3f; }
 .pc-mod { display: flex; gap: 0.4rem; margin-top: 0.15rem; }
 .pc-form { flex-direction: column; align-items: stretch; gap: 0.5rem; margin-top: auto; }
 .pc-form .quick-top select { flex: 1; }
