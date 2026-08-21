@@ -5,8 +5,9 @@ a card per player with their avatar, last-seen time, hours played, and the
 player-targeted commands right on it
 (teleport, give, effect, gamemode, XP, message, summon, clear, kill, kick, ban),
 global commands with one-click presets (time, weather, game rules, difficulty),
-a browser RCON console, whitelist management, log tail, and a graceful restart
-button, across four tabs. FastAPI + vanilla JS, one container, deliberately
+saved teleport waypoints (grab a player's live position, name it, teleport
+anyone there later — across dimensions), a browser RCON console, whitelist
+management, log tail, and a graceful restart button, across five tabs. FastAPI + vanilla JS, one container, deliberately
 **no Docker socket**: the entire admin surface is RCON plus a read-only log mount.
 
 Named for the in-game block whose entire job is executing console commands — and
@@ -46,4 +47,5 @@ python3 -m venv .venv
 RCON_HOST=localhost RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 ```
 
-No state, no database, no build step. The container can be killed and recreated at will.
+No database, no build step, and the only state is `waypoints.json` in the `cb_data`
+volume — the container itself can be killed and recreated at will.

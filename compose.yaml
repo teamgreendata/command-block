@@ -13,6 +13,8 @@ services:
       # read-only, like the logs: usercache.json + world stats/playerdata feed
       # the per-player "last seen" and "hours played" on the dashboard cards
       - /opt/stacks/minecraft/data:/mc-data:ro
+      # the one piece of dashboard state: saved teleport waypoints
+      - cb_data:/cb-data
     networks:
       - mc_net
 
@@ -20,3 +22,6 @@ networks:
   mc_net:
     external: true
     name: minecraft_default
+
+volumes:
+  cb_data:

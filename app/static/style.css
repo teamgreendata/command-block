@@ -101,7 +101,7 @@ main {
   gap: 1rem;
 }
 /* single-panel tabs */
-#page-console.active, #page-whitelist.active, #page-logs.active { grid-template-columns: 1fr; }
+#page-console.active, #page-whitelist.active, #page-waypoints.active, #page-logs.active { grid-template-columns: 1fr; }
 @media (max-width: 750px) { .tab-page.active { grid-template-columns: 1fr; } }
 
 /* Inventory-window panel: black outline, light top-left bevel, dark bottom-right */
@@ -217,6 +217,11 @@ select {
   font-size: 0.85rem;
 }
 select:focus { outline: none; border-color: #fff; }
+
+.wp-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; width: 100%; }
+.wp-grid .qf { flex: 1 1 9rem; }
+.wp-grab { display: flex; gap: 0.5rem; margin-top: 0.4rem; }
+.wp-grab select { flex: 0 1 14rem; min-width: 0; }
 
 .preset-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.7rem; }
 #quick-form { flex-direction: column; align-items: stretch; gap: 0.6rem; }

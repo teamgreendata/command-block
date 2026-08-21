@@ -1,4 +1,4 @@
-import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick } from './quick-commands.js';
+import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick, buildWaypointTp } from './quick-commands.js';
 
 const $ = s => document.querySelector(s);
 const stripCodes = s => String(s).replace(/§./g, '');
@@ -68,7 +68,7 @@ function fillList(ul, items, emptyText) {
 
 // ---------------------------------------------------------------- tabs
 
-const TABS = ['dashboard', 'console', 'whitelist', 'logs'];
+const TABS = ['dashboard', 'console', 'whitelist', 'waypoints', 'logs'];
 
 function showTab(name) {
   if (!TABS.includes(name)) name = 'dashboard';
@@ -148,6 +148,7 @@ async function refreshPlayers() {
   } catch {
     lastOnline = [];
   }
+  updateGrabSelect(lastOnline);
   renderCards();
   refreshPlayerStats();
 }
@@ -256,6 +257,83 @@ $('#broadcast-form').addEventListener('submit', async e => {
     flash('Broadcast sent.');
     $('#broadcast-msg').value = '';
   } catch (err) { flash(err.message, true); }
+});
+
+// ---------------------------------------------------------------- waypoints
+
+let waypoints = [];
+const DIM_LABEL = {
+  'minecraft:overworld': 'overworld',
+  'minecraft:the_nether': 'nether',
+  'minecraft:the_end': 'end',
+};
+
+function setWaypoints(list) {
+  waypoints = list;
+  renderWaypointList();
+  cardsKey = null; // the cards' Teleport dropdowns need a rebuild
+  renderCards();
+}
+
+async function refreshWaypoints() {
+  try {
+    setWaypoints((await api('/api/waypoints')).waypoints);
+  } catch {
+    setWaypoints([]);
+  }
+}
+
+function renderWaypointList() {
+  fillList($('#waypoint-list'), waypoints.map(w =>
+    row(`${w.name} — ${w.pos}${w.dim ? ` (${DIM_LABEL[w.dim] || w.dim})` : ''}`, [
+      ['remove', 'small', () => waypointRemove(w.name)],
+    ])), 'no waypoints yet');
+}
+
+async function waypointRemove(name) {
+  try {
+    const r = await api('/api/waypoints', { action: 'remove', name });
+    setWaypoints(r.waypoints);
+    flash(`Removed waypoint "${name}".`);
+  } catch (e) { flash(e.message, true); }
+}
+
+$('#waypoint-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('#wp-name').value.trim();
+  const pos = $('#wp-pos').value.trim();
+  if (!name || !pos) { flash('A waypoint needs a name and a position.', true); return; }
+  try {
+    const r = await api('/api/waypoints', { action: 'add', name, pos, dim: $('#wp-dim').value });
+    setWaypoints(r.waypoints);
+    flash(`Saved waypoint "${name}".`);
+    $('#wp-name').value = '';
+    $('#wp-pos').value = '';
+  } catch (err) { flash(err.message, true); }
+});
+
+function updateGrabSelect(names) {
+  const sel = $('#wp-grab-player');
+  const prev = sel.value;
+  sel.replaceChildren(...names.map(n => {
+    const o = document.createElement('option');
+    o.value = o.textContent = n;
+    return o;
+  }));
+  if (names.includes(prev)) sel.value = prev;
+  $('#wp-grab-btn').disabled = !names.length;
+}
+
+$('#wp-grab-btn').addEventListener('click', async () => {
+  const who = $('#wp-grab-player').value;
+  if (!who) return;
+  try {
+    const p = await api(`/api/position/${who}`);
+    $('#wp-pos').value = p.pos;
+    if (p.dim) $('#wp-dim').value = p.dim;
+    flash(`Grabbed ${who}’s position — name it and add.`);
+    $('#wp-name').focus();
+  } catch (e) { flash(e.message, true); }
 });
 
 // ---------------------------------------------------------------- player cards
@@ -379,7 +457,11 @@ function playerCard(name, isOnline) {
     const cmd = findCommand(sel.value);
     const values = collectValues(fields);
     values[cmd.playerField] = name;
-    const built = buildQuick(cmd, values);
+    // a waypoint destination bypasses the generic builder (execute-in aware)
+    const wp = cmd.name === 'tp' && String(values.dest || '').startsWith('wp:')
+      ? waypoints.find(w => `wp:${w.name}` === values.dest)
+      : null;
+    const built = wp ? { command: buildWaypointTp(name, wp) } : buildQuick(cmd, values);
     if (built.error) { flash(built.error, true); return; }
     sendRaw(built.command, cmd.confirm ? cmd.confirm(built.args) : null);
   });
@@ -494,6 +576,21 @@ function updatePlayerDatalist(names) {
 
 const CUSTOM = '__custom__';
 
+// The "Custom…" free-text escape shared by choice and dest dropdowns.
+function customEscape(sel, f) {
+  const customInput = document.createElement('input');
+  customInput.type = 'text';
+  customInput.spellcheck = false;
+  customInput.placeholder = f.placeholder || 'exact id';
+  customInput.hidden = true;
+  customInput.dataset.customFor = f.key;
+  sel.addEventListener('change', () => {
+    customInput.hidden = sel.value !== CUSTOM;
+    if (!customInput.hidden) customInput.focus();
+  });
+  return customInput;
+}
+
 // Renders a command's argument fields into `wrap`, skipping keys in `skip`
 // (cards use that to hide the auto-filled player arg). Shared by the global
 // panel and every player card.
@@ -506,6 +603,39 @@ function renderFields(wrap, cmd, skip = []) {
     const label = document.createElement('label');
     label.textContent = f.required ? `${f.label} *` : f.label;
     div.appendChild(label);
+    if (f.type === 'dest') {
+      // teleport destination: online players + saved waypoints + Custom
+      const sel = document.createElement('select');
+      const blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = 'choose…';
+      sel.appendChild(blank);
+      const groups = [['Players', lastOnline.map(n => [n, n])],
+                      ['Waypoints', waypoints.map(w => [`wp:${w.name}`, w.name])]];
+      for (const [title, opts] of groups) {
+        if (!opts.length) continue;
+        const g = document.createElement('optgroup');
+        g.label = title;
+        for (const [value, text] of opts) {
+          const o = document.createElement('option');
+          o.value = value;
+          o.textContent = text;
+          g.appendChild(o);
+        }
+        sel.appendChild(g);
+      }
+      const custom = document.createElement('option');
+      custom.value = CUSTOM;
+      custom.textContent = 'Custom…';
+      sel.appendChild(custom);
+      sel.dataset.key = f.key;
+      div.appendChild(sel);
+      const customInput = customEscape(sel, f);
+      customInput.setAttribute('list', 'dl-players');
+      div.appendChild(customInput);
+      wrap.appendChild(div);
+      continue;
+    }
     if (f.type === 'select' || f.type === 'choice') {
       const sel = document.createElement('select');
       if (f.type === 'choice') {
@@ -534,17 +664,7 @@ function renderFields(wrap, cmd, skip = []) {
       sel.dataset.key = f.key;
       div.appendChild(sel);
       if (f.type === 'choice') {
-        const customInput = document.createElement('input');
-        customInput.type = 'text';
-        customInput.spellcheck = false;
-        customInput.placeholder = f.placeholder || 'exact id';
-        customInput.hidden = true;
-        customInput.dataset.customFor = f.key;
-        sel.addEventListener('change', () => {
-          customInput.hidden = sel.value !== CUSTOM;
-          if (!customInput.hidden) customInput.focus();
-        });
-        div.appendChild(customInput);
+        div.appendChild(customEscape(sel, f));
       }
     } else {
       const input = document.createElement('input');
@@ -629,8 +749,10 @@ $('#logs-auto').addEventListener('change', e => {
 
 showTab(location.hash.slice(1));
 updatePlayerDatalist([]);
+updateGrabSelect([]);
 renderGlobalFields(GLOBAL_COMMANDS[0]);
 renderCards();
+refreshWaypoints();
 refreshStatus();
 refreshWhitelist();
 refreshLogs();

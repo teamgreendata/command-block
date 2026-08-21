@@ -8,6 +8,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ app/
 
 RUN useradd --create-home --uid 10001 dash
+# /cb-data holds waypoints.json; the named volume inherits this ownership on
+# first use so the non-root user can write it
+RUN mkdir /cb-data && chown dash /cb-data
 USER dash
 
 ENV DASH_PORT=8300

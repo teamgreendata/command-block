@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick } from '../app/static/quick-commands.js';
+import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick, buildWaypointTp } from '../app/static/quick-commands.js';
 
 const cases = [
   ['gamemode', { mode: 'creative', player: 'alice' }, 'gamemode creative alice'],
@@ -73,6 +73,15 @@ test('choice fields reference real suggestion lists', () => {
       if (f.type === 'choice') assert.ok(Array.isArray(SUGGESTIONS[f.choices]), `${c.name}.${f.key}`);
     }
   }
+});
+
+test('waypoint teleports use execute-in when a dimension is recorded', () => {
+  assert.equal(
+    buildWaypointTp('alice', { name: 'Nether hub', pos: '12 70 -30', dim: 'minecraft:the_nether' }),
+    'execute in minecraft:the_nether run tp alice 12 70 -30');
+  assert.equal(
+    buildWaypointTp('alice', { name: 'Home base', pos: '100 64 -200', dim: null }),
+    'tp alice 100 64 -200');
 });
 
 test('scopes split 9 player / 4 global, with valid card wiring', () => {

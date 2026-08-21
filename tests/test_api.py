@@ -252,3 +252,59 @@ def test_playerstats_missing_mount_is_graceful(client, monkeypatch, tmp_path):
     assert r.status_code == 200
     assert r.json()["players"] == {}
     assert "error" in r.json()
+
+
+@pytest.fixture
+def wp_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("CB_DATA", str(tmp_path))
+    return tmp_path
+
+
+def test_waypoints_roundtrip(client, wp_dir):
+    assert client.get("/api/waypoints").json() == {"waypoints": []}
+    r = client.post("/api/waypoints", json={
+        "action": "add", "name": "Home base", "pos": "100 64 -200",
+        "dim": "minecraft:overworld"})
+    assert r.status_code == 200
+    r = client.post("/api/waypoints", json={"action": "add", "name": "cave", "pos": "-10.5 12 900"})
+    assert [w["name"] for w in r.json()["waypoints"]] == ["cave", "Home base"]
+    # re-adding the same name (any case) replaces it
+    r = client.post("/api/waypoints", json={"action": "add", "name": "home BASE", "pos": "1 2 3"})
+    assert [(w["name"], w["pos"]) for w in r.json()["waypoints"]] == [
+        ("cave", "-10.5 12 900"), ("home BASE", "1 2 3")]
+    r = client.post("/api/waypoints", json={"action": "remove", "name": "cave"})
+    assert [w["name"] for w in r.json()["waypoints"]] == ["home BASE"]
+    # state survives a container restart: it's a real file
+    assert json.loads((wp_dir / "waypoints.json").read_text())[0]["name"] == "home BASE"
+
+
+def test_waypoints_validation(client, wp_dir):
+    bad = [
+        {"action": "add", "name": "x" * 33, "pos": "1 2 3"},
+        {"action": "add", "name": "no; injection", "pos": "1 2 3"},
+        {"action": "add", "name": "ok", "pos": "1 2"},
+        {"action": "add", "name": "ok", "pos": "1 2 three"},
+        {"action": "add", "name": "ok", "pos": "1 2 3", "dim": "minecraft:moon"},
+    ]
+    for body in bad:
+        assert client.post("/api/waypoints", json=body).status_code == 400, body
+    assert client.get("/api/waypoints").json()["waypoints"] == []
+
+
+def test_position_grabs_online_player(client, monkeypatch):
+    async def fake(command, *, expect_disconnect=False):
+        if command.endswith("Pos"):
+            return "RobGreen has the following entity data: [186.61d, 63.0d, -14.36d]"
+        return 'RobGreen has the following entity data: "minecraft:the_nether"'
+
+    monkeypatch.setattr(main, "rcon_command", fake)
+    r = client.get("/api/position/RobGreen")
+    assert r.json() == {"pos": "187 63 -14", "dim": "minecraft:the_nether"}
+
+
+def test_position_offline_player_is_404(client, monkeypatch):
+    async def fake(command, *, expect_disconnect=False):
+        return "No entity was found"
+
+    monkeypatch.setattr(main, "rcon_command", fake)
+    assert client.get("/api/position/ghost").status_code == 404

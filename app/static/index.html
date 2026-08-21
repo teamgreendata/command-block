@@ -17,6 +17,7 @@
   <button type="button" class="tab" data-tab="dashboard">Dashboard</button>
   <button type="button" class="tab" data-tab="console">Console</button>
   <button type="button" class="tab" data-tab="whitelist">Whitelist</button>
+  <button type="button" class="tab" data-tab="waypoints">Waypoints</button>
   <button type="button" class="tab" data-tab="logs">Logs</button>
 </nav>
 
@@ -93,6 +94,42 @@
         <input id="pardon-name" placeholder="player name" maxlength="16">
         <button>Pardon</button>
       </form>
+    </section>
+  </section>
+
+  <section class="tab-page" id="page-waypoints">
+    <section class="panel" id="waypoints-panel">
+      <h2>Waypoints</h2>
+      <p class="quick-desc">Saved teleport spots — they show up in every card’s Teleport dropdown.</p>
+      <ul id="waypoint-list" class="rows"><li class="empty">–</li></ul>
+      <h3>Add / update</h3>
+      <form id="waypoint-form" autocomplete="off">
+        <div class="wp-grid">
+          <div class="qf">
+            <label>name *</label>
+            <input id="wp-name" maxlength="32" placeholder="Home base">
+          </div>
+          <div class="qf">
+            <label>position (x y z) *</label>
+            <input id="wp-pos" spellcheck="false" placeholder="100 64 -200">
+          </div>
+          <div class="qf">
+            <label>dimension</label>
+            <select id="wp-dim">
+              <option value="minecraft:overworld">Overworld</option>
+              <option value="minecraft:the_nether">Nether</option>
+              <option value="minecraft:the_end">End</option>
+            </select>
+          </div>
+          <button>Add waypoint</button>
+        </div>
+      </form>
+      <h3>Grab a player’s position</h3>
+      <div class="wp-grab">
+        <select id="wp-grab-player"></select>
+        <button id="wp-grab-btn" type="button">Grab</button>
+      </div>
+      <p class="quick-desc">Stand where the waypoint should be, grab the position, name it, add.</p>
     </section>
   </section>
 

@@ -134,7 +134,9 @@ export const QUICK_COMMANDS = [
     playerField: 'player',
     fields: [
       { key: 'player', label: 'who', type: 'player', required: true },
-      { key: 'dest', label: 'to (player or x y z)', type: 'player', required: true, placeholder: 'alice — or — 100 64 -200' },
+      // dest: rendered as online players + saved waypoints + Custom; waypoint
+      // picks bypass build() and go through buildWaypointTp instead
+      { key: 'dest', label: 'to', type: 'dest', required: true, placeholder: 'alice — or — 100 64 -200' },
     ],
     build: a => `tp ${a.player} ${a.dest}`,
   },
@@ -281,6 +283,15 @@ export const PRESETS = [
 
 export function findCommand(name) {
   return QUICK_COMMANDS.find(c => c.name === name);
+}
+
+// Teleport to a saved waypoint {name, pos, dim}. When the waypoint recorded a
+// dimension, go through `execute in` so it works from anywhere (plain tp only
+// moves players within their current dimension).
+export function buildWaypointTp(player, wp) {
+  return wp.dim
+    ? `execute in ${wp.dim} run tp ${player} ${wp.pos}`
+    : `tp ${player} ${wp.pos}`;
 }
 
 // Returns {command} or {error} — the single path the UI (and tests) go through.

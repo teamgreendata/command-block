@@ -1,7 +1,8 @@
 """command-block — RCON-shaped admin dashboard for the minecraft stack.
 
-No Docker socket, no state, no database. Everything is RCON plus a
-read-only log mount; config comes from the environment only.
+No Docker socket, no database. Everything is RCON plus read-only mounts of
+the server's logs and data dir; config comes from the environment only. The
+single piece of state is waypoints.json in the cb_data volume.
 """
 
 import asyncio
@@ -153,6 +154,13 @@ class Command(BaseModel):
     command: str
 
 
+class WaypointChange(BaseModel):
+    action: Literal["add", "remove"]
+    name: str
+    pos: str | None = None
+    dim: str | None = None
+
+
 # ---------------------------------------------------------------- endpoints
 
 
@@ -264,6 +272,82 @@ async def logs(lines: int = Query(100, ge=1)):
 @app.get("/api/tps")
 async def tps():
     return parse_tps(await rcon_command("tps"))
+
+
+# ---------------------------------------------------------------- waypoints
+
+# Saved teleport targets — the one piece of dashboard state, a small JSON file
+# in the cb_data volume (CB_DATA overrides the dir for tests/local runs).
+_WP_NAME_RE = re.compile(r"^[A-Za-z0-9 _\-']{1,32}$")
+_WP_POS_RE = re.compile(r"^-?\d+(?:\.\d+)? -?\d+(?:\.\d+)? -?\d+(?:\.\d+)?$")
+_DIMENSIONS = {"minecraft:overworld", "minecraft:the_nether", "minecraft:the_end"}
+
+
+def _waypoints_file() -> Path:
+    return Path(_env("CB_DATA", "/cb-data")) / "waypoints.json"
+
+
+def _load_waypoints() -> list[dict]:
+    try:
+        return json.loads(_waypoints_file().read_text())
+    except (OSError, ValueError):
+        return []
+
+
+def _store_waypoints(wps: list[dict]) -> None:
+    path = _waypoints_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(wps, indent=2))
+    tmp.replace(path)  # atomic on the same filesystem
+
+
+@app.get("/api/waypoints")
+async def waypoints():
+    return {"waypoints": _load_waypoints()}
+
+
+@app.post("/api/waypoints")
+async def waypoints_change(body: WaypointChange):
+    name = body.name.strip()
+    if not _WP_NAME_RE.match(name):
+        return _bad_request("Waypoint names: letters, digits, spaces, -_' — max 32.")
+    wps = [w for w in _load_waypoints() if w["name"].lower() != name.lower()]
+    if body.action == "add":
+        pos = " ".join((body.pos or "").split())
+        if not _WP_POS_RE.match(pos):
+            return _bad_request('Position must be three numbers: "x y z".')
+        if body.dim and body.dim not in _DIMENSIONS:
+            return _bad_request("Unknown dimension.")
+        wps.append({"name": name, "pos": pos, "dim": body.dim})
+        wps.sort(key=lambda w: w["name"].lower())
+    try:
+        _store_waypoints(wps)
+    except OSError:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Can't write waypoints under {_waypoints_file().parent}."},
+        )
+    return {"waypoints": wps}
+
+
+# Live position over RCON (online players only) — lets the UI capture "where
+# I'm standing" as a waypoint instead of typing coordinates.
+_POS_DATA_RE = re.compile(r"\[(-?[\d.]+)d?, (-?[\d.]+)d?, (-?[\d.]+)d?\]")
+
+
+@app.get("/api/position/{name}")
+async def position(name: str):
+    if not _NAME_RE.match(name):
+        return _bad_request("Invalid player name (letters, digits, underscore; max 16).")
+    raw = strip_colors(await rcon_command(f"data get entity {name} Pos"))
+    m = _POS_DATA_RE.search(raw)
+    if not m:  # offline: "No entity was found"
+        return JSONResponse(status_code=404, content={"error": raw})
+    pos = " ".join(str(round(float(g))) for g in m.groups())
+    dim_raw = strip_colors(await rcon_command(f"data get entity {name} Dimension"))
+    dim = re.search(r'"(minecraft:[a-z_]+)"', dim_raw)
+    return {"pos": pos, "dim": dim.group(1) if dim else None}
 
 
 # ---------------------------------------------------------------- player stats

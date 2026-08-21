@@ -30,8 +30,8 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 41 tests, no network, no MC server
-node --test                                   # frontend command builders: 30 tests (bare, not `node --test tests/`)
+.venv/bin/python -m pytest                    # backend: 45 tests, no network, no MC server
+node --test                                   # frontend command builders: 31 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
 ```
@@ -83,8 +83,17 @@ template (set empty to disable avatar fetching).
   `playerdata/<uuid>.dat` mtime as last-seen. The world folder is auto-detected (wherever
   `playerdata/` lives). These files only update on save/logout/autosave, so a currently
   online player's hours lag a few minutes — the UI shows "now" for their last-seen.
-- UI structure: four hash-routed tabs — **Dashboard** (status + Global commands panel +
-  a card per whitelisted/online player), **Console**, **Whitelist**, **Logs**. The card vs
+- **Waypoints are the one piece of dashboard state**: `waypoints.json` in the `cb_data`
+  named volume (`CB_DATA` overrides the dir for tests; the Dockerfile pre-creates
+  `/cb-data` owned by `dash` so the volume inherits writable ownership). CRUD via
+  GET/POST `/api/waypoints` (names ≤32 chars of letters/digits/spaces/-_', positions
+  strictly "x y z" — only validated pos/dim ever reach RCON). `GET /api/position/{name}`
+  grabs an online player's spot via `data get entity` for the capture-position button.
+  Waypoint teleports go through `buildWaypointTp` — `execute in <dim> run tp` whenever
+  the waypoint recorded a dimension, so cross-dimension teleports work.
+- UI structure: five hash-routed tabs — **Dashboard** (status + Global commands panel +
+  a card per whitelisted/online player), **Console**, **Whitelist**, **Waypoints**,
+  **Logs**. The card vs
   global split is data-driven: each command in `quick-commands.js` carries
   `scope: 'player'|'global'`, and player commands name their `playerField`, which cards
   auto-fill with the card's player and hide (`cardHide` drops extra fields, e.g. summon's
