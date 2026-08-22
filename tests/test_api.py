@@ -361,6 +361,79 @@ def test_playerstats_whitelist_json_covers_expired_usercache(client, mc_data):
     assert r.json()["players"]["alice"]["hours"] == 2.0  # usercache entries still work
 
 
+def _nbt_playerdata(xp: int, health: float, food: int) -> bytes:
+    import struct as _struct
+    raw = (b"\n\x00\x00"
+           + b"\x03\x00\x07XpLevel" + xp.to_bytes(4, "big")
+           + b"\x05\x00\x06Health" + _struct.pack(">f", health)
+           + b"\x03\x00\x09foodLevel" + food.to_bytes(4, "big")
+           + b"\x00")
+    return gzip.compress(raw)
+
+
+def test_playerstats_full_stat_fields(client, mc_data):
+    stats = {"stats": {
+        "minecraft:custom": {
+            "minecraft:play_time": 144000,          # 2h
+            "minecraft:deaths": 7,
+            "minecraft:mob_kills": 321,
+            "minecraft:player_kills": 2,
+            "minecraft:sleep_in_bed": 40,
+            "minecraft:enchant_item": 5,
+            "minecraft:fish_caught": 11,
+            "minecraft:animals_bred": 22,
+            "minecraft:traded_with_villager": 33,
+            "minecraft:damage_dealt": 12340,
+            "minecraft:damage_taken": 4680,
+            "minecraft:time_since_death": 24000,    # 1200s
+            "minecraft:time_since_rest": 4000,      # 200s
+            "minecraft:walk_one_cm": 100000,
+            "minecraft:sprint_one_cm": 50000,
+            "minecraft:aviate_one_cm": 999999,      # elytra tracked separately
+        },
+        "minecraft:mined": {
+            "minecraft:stone": 500,
+            "minecraft:diamond_ore": 3,
+            "minecraft:deepslate_diamond_ore": 2,
+        },
+        "minecraft:crafted": {"minecraft:stick": 60, "minecraft:torch": 40},
+        "minecraft:killed": {"minecraft:zombie": 50, "minecraft:creeper": 9},
+        "minecraft:killed_by": {"minecraft:skeleton": 4, "minecraft:zombie": 1},
+    }}
+    (mc_data / "world" / "stats" / f"{UUID_A}.json").write_text(json.dumps(stats))
+    (mc_data / "world" / "playerdata" / f"{UUID_A}.dat").write_bytes(
+        _nbt_playerdata(xp=27, health=19.0, food=18))
+    alice = client.get("/api/playerstats").json()["players"]["alice"]
+    assert alice["hours"] == 2.0
+    assert alice["deaths"] == 7
+    assert alice["mob_kills"] == 321
+    assert alice["player_kills"] == 2
+    assert alice["sleep_count"] == 40
+    assert alice["enchanted"] == 5
+    assert (alice["fish_caught"], alice["animals_bred"], alice["trades"]) == (11, 22, 33)
+    assert (alice["damage_dealt"], alice["damage_taken"]) == (12340, 4680)
+    assert alice["life_s"] == 1200
+    assert alice["since_sleep_s"] == 200
+    assert alice["distance_cm"] == 150000  # aviate excluded
+    assert alice["aviate_cm"] == 999999
+    assert alice["mined_total"] == 505
+    assert alice["diamonds"] == 5  # both ore variants
+    assert alice["crafted_total"] == 100
+    assert alice["nemesis"] == {"id": "minecraft:skeleton", "count": 4}
+    assert alice["top_victim"] == {"id": "minecraft:zombie", "count": 50}
+    assert (alice["xp_level"], alice["health"], alice["food"]) == (27, 19.0, 18)
+
+
+def test_settings_roundtrip_and_validation(client, wp_dir):
+    assert client.get("/api/settings").json() == {"card_stats": None}  # unset -> frontend defaults
+    r = client.post("/api/settings", json={"card_stats": ["hours", "deaths", "xp"]})
+    assert r.status_code == 200
+    assert client.get("/api/settings").json() == {"card_stats": ["hours", "deaths", "xp"]}
+    assert json.loads((wp_dir / "settings.json").read_text())["card_stats"] == ["hours", "deaths", "xp"]
+    for bad in (["Bad-Key"], ["x" * 33], ["ok"] * 51):
+        assert client.post("/api/settings", json={"card_stats": bad}).status_code == 400, bad
+
+
 def test_playerstats_modern_players_layout(client, tmp_path, monkeypatch):
     # this MC generation nests everything under world/players/{data,stats}
     # (verified against a live Paper 26.2 world) — the classic layout in the

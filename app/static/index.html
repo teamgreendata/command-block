@@ -26,6 +26,7 @@
   <button type="button" class="tab" data-tab="console">Console</button>
   <button type="button" class="tab" data-tab="whitelist">Whitelist</button>
   <button type="button" class="tab" data-tab="waypoints">Waypoints</button>
+  <button type="button" class="tab" data-tab="settings">Settings</button>
   <button type="button" class="tab" data-tab="logs">Logs</button>
 </nav>
 
@@ -150,6 +151,19 @@
         <button id="wp-grab-btn" type="button">Grab</button>
       </div>
       <p class="quick-desc">Stand where the waypoint should be, grab the position, name it, add.</p>
+    </section>
+  </section>
+
+  <section class="tab-page" id="page-settings">
+    <section class="panel" id="settings-panel">
+      <h2>Settings</h2>
+      <h3>Player-card stats</h3>
+      <p class="quick-desc">Tick the stats each player card should show, then save. Applies everywhere — the choice is stored on the server.</p>
+      <div id="settings-stats" class="settings-grid"></div>
+      <div class="actions">
+        <button id="settings-defaults" type="button" class="small">Reset to defaults</button>
+        <button id="settings-save" type="button">Save</button>
+      </div>
     </section>
   </section>
 

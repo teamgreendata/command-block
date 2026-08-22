@@ -30,8 +30,8 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 51 tests, no network, no MC server
-node --test                                   # frontend command builders: 31 tests (bare, not `node --test tests/`)
+.venv/bin/python -m pytest                    # backend: 53 tests, no network, no MC server
+node --test                                   # frontend builders + stat formatters: 37 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
 ```
@@ -99,7 +99,15 @@ template (set empty to disable avatar fetching).
   shows "now" for their last-seen. Name→UUID mapping merges `usercache.json` (expires
   ~30 days after last join) with `whitelist.json` (permanent), so whitelisted players
   keep lifetime stats no matter how long they've been away.
-- **Waypoints are the one piece of dashboard state**: `waypoints.json` in the `cb_data`
+- `/api/playerstats` computes **every** card stat (deaths, life/sleep timers, kills,
+  damage, distances, mining, crafting, husbandry, plus XP/health/food read from the
+  playerdata .dat NBT — classic names `XpLevel`/`Health`/`foodLevel` survive in 26.2).
+  Which rows actually render is chosen on the **Settings tab**: the registry + formatters
+  live in `app/static/stats.js` (DOM-free, node-tested), the selection persists via
+  GET/POST `/api/settings` → `settings.json` in `cb_data` (backend is dumb storage;
+  `card_stats: null` = frontend defaults).
+- **Dashboard state lives in the `cb_data` volume**: `waypoints.json` and
+  `settings.json`. Waypoints details: `waypoints.json` in the `cb_data`
   named volume (`CB_DATA` overrides the dir for tests; the Dockerfile pre-creates
   `/cb-data` owned by `dash` so the volume inherits writable ownership). CRUD via
   GET/POST `/api/waypoints` (names ≤32 chars of letters/digits/spaces/-_', positions
@@ -107,10 +115,11 @@ template (set empty to disable avatar fetching).
   grabs an online player's spot via `data get entity` for the capture-position button.
   Waypoint teleports go through `buildWaypointTp` — `execute in <dim> run tp` whenever
   the waypoint recorded a dimension, so cross-dimension teleports work.
-- UI structure: six hash-routed tabs — **Dashboard** (Global commands across the top +
+- UI structure: seven hash-routed tabs — **Dashboard** (Global commands across the top +
   a full-body card per whitelisted/online player), **Server Info** (status/facts +
-  world panel), **Console**, **Whitelist**, **Waypoints**, **Logs** — plus the header's
-  sky widget (status dot, in-game clock + day/night icon, day count, weather). The card vs
+  world panel), **Console**, **Whitelist**, **Waypoints**, **Settings** (card-stat
+  picker), **Logs** — plus the header's sky widget (status dot, in-game clock +
+  weather-condition icon, day count). The card vs
   global split is data-driven: each command in `quick-commands.js` carries
   `scope: 'player'|'global'`, and player commands name their `playerField`, which cards
   auto-fill with the card's player and hide (`cardHide` drops extra fields, e.g. summon's

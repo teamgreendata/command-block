@@ -1,4 +1,5 @@
 import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick, buildWaypointTp } from './quick-commands.js';
+import { CARD_STATS, DEFAULT_CARD_STATS, fmtDuration } from './stats.js';
 
 const $ = s => document.querySelector(s);
 const stripCodes = s => String(s).replace(/§./g, '');
@@ -70,7 +71,7 @@ function fillList(ul, items, emptyText) {
 
 // ---------------------------------------------------------------- tabs
 
-const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'logs'];
+const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'settings', 'logs'];
 
 function showTab(name) {
   if (!TABS.includes(name)) name = 'dashboard';
@@ -185,15 +186,6 @@ async function refreshClock() {
   clockTimer = setTimeout(refreshClock, 10000);
 }
 
-function fmtDuration(s) {
-  const d = Math.floor(s / 86400);
-  const h = Math.floor(s % 86400 / 3600);
-  const m = Math.floor(s % 3600 / 60);
-  if (d) return `${d}d ${h}h`;
-  if (h) return `${h}h ${m}m`;
-  return `${m} min`;
-}
-
 async function refreshServerInfo() {
   try {
     const s = await api('/api/serverinfo');
@@ -253,27 +245,30 @@ async function refreshPlayerStats() {
   applyStats();
 }
 
-function timeAgo(epoch) {
-  if (!epoch) return '–';
-  const s = Math.floor(Date.now() / 1000 - epoch);
-  if (s < 60) return 'just now';
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m} min ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} h ago`;
-  const d = Math.floor(h / 24);
-  return d === 1 ? 'yesterday' : `${d} days ago`;
-}
+let enabledStats = DEFAULT_CARD_STATS;
 
-// Patch stat lines on the cards in place — cards only re-render when the
-// player/online sets change, but these numbers tick along every poll.
+// Rebuild the stat rows on every card — cards only fully re-render when the
+// player/online sets change, but these numbers tick along every poll. Safe to
+// rebuild wholesale: no form state lives inside .pc-stats.
 function applyStats() {
+  const ctx = { now: Math.floor(Date.now() / 1000), online: false };
+  const rows = CARD_STATS.filter(r => enabledStats.includes(r.key));
   for (const card of document.querySelectorAll('.player-card')) {
-    const st = playerStats[card.dataset.name];
-    card.querySelector('.pc-last').textContent =
-      card.dataset.online === '1' ? 'now' : timeAgo(st && st.last_seen);
-    card.querySelector('.pc-hours').textContent =
-      st && st.hours != null ? `${st.hours} h` : '–';
+    const st = playerStats[card.dataset.name] || {};
+    ctx.online = card.dataset.online === '1';
+    const wrap = card.querySelector('.pc-stats');
+    wrap.replaceChildren();
+    for (const row of rows) {
+      const out = row.fmt(st, ctx);
+      const text = typeof out === 'string' ? out : out.text;
+      const k = document.createElement('span');
+      k.textContent = row.label;
+      const v = document.createElement('span');
+      v.className = 'pc-stat-v' + (out.warn ? ' warn' : '');
+      v.textContent = text;
+      wrap.appendChild(k);
+      wrap.appendChild(v);
+    }
   }
 }
 
@@ -428,6 +423,48 @@ $('#wp-grab-btn').addEventListener('click', async () => {
   } catch (e) { flash(e.message, true); }
 });
 
+// ---------------------------------------------------------------- settings
+
+function renderSettingsChecklist() {
+  const wrap = $('#settings-stats');
+  wrap.replaceChildren();
+  for (const row of CARD_STATS) {
+    const label = document.createElement('label');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.value = row.key;
+    box.checked = enabledStats.includes(row.key);
+    label.appendChild(box);
+    label.appendChild(document.createTextNode(` ${row.label}`));
+    wrap.appendChild(label);
+  }
+}
+
+async function refreshSettings() {
+  try {
+    const s = await api('/api/settings');
+    if (Array.isArray(s.card_stats)) enabledStats = s.card_stats;
+  } catch { /* keep defaults */ }
+  renderSettingsChecklist();
+  applyStats();
+}
+
+$('#settings-save').addEventListener('click', async () => {
+  const picked = [...$('#settings-stats').querySelectorAll('input:checked')].map(b => b.value);
+  try {
+    const s = await api('/api/settings', { card_stats: picked });
+    enabledStats = s.card_stats;
+    applyStats();
+    flash('Card stats saved.');
+  } catch (e) { flash(e.message, true); }
+});
+
+$('#settings-defaults').addEventListener('click', () => {
+  for (const box of $('#settings-stats').querySelectorAll('input')) {
+    box.checked = DEFAULT_CARD_STATS.includes(box.value);
+  }
+});
+
 // ---------------------------------------------------------------- player cards
 
 // Pixel full-body placeholder for when the avatar proxy has nothing (offline,
@@ -486,16 +523,7 @@ function playerCard(name, isOnline) {
   id.appendChild(state);
 
   const stats = document.createElement('div');
-  stats.className = 'pc-stats';
-  for (const [label, cls] of [['Last seen', 'pc-last'], ['Played', 'pc-hours']]) {
-    const k = document.createElement('span');
-    k.textContent = label;
-    const v = document.createElement('span');
-    v.className = `pc-stat-v ${cls}`;
-    v.textContent = '–';
-    stats.appendChild(k);
-    stats.appendChild(v);
-  }
+  stats.className = 'pc-stats'; // rows filled by applyStats()
   id.appendChild(stats);
 
   const mod = document.createElement('div');
@@ -847,6 +875,7 @@ updatePlayerDatalist([]);
 updateGrabSelect([]);
 renderGlobalFields(GLOBAL_COMMANDS[0]);
 renderCards();
+refreshSettings();
 refreshWaypoints();
 refreshStatus();
 refreshClock();

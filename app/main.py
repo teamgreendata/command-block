@@ -12,6 +12,7 @@ import json
 import os
 import re
 import secrets
+import struct
 import time
 import urllib.request
 from collections import deque
@@ -160,6 +161,10 @@ class WaypointChange(BaseModel):
     name: str
     pos: str | None = None
     dim: str | None = None
+
+
+class Settings(BaseModel):
+    card_stats: list[str]
 
 
 # ---------------------------------------------------------------- endpoints
@@ -332,6 +337,43 @@ async def waypoints_change(body: WaypointChange):
     return {"waypoints": wps}
 
 
+# ---------------------------------------------------------------- settings
+
+# Dumb storage next to waypoints.json in the cb_data volume: the frontend's
+# stats.js owns the registry keys and the defaults (card_stats: None = unset).
+_SETTING_KEY_RE = re.compile(r"^[a-z_]{1,32}$")
+
+
+def _settings_file() -> Path:
+    return Path(_env("CB_DATA", "/cb-data")) / "settings.json"
+
+
+@app.get("/api/settings")
+async def settings():
+    try:
+        return json.loads(_settings_file().read_text())
+    except (OSError, ValueError):
+        return {"card_stats": None}
+
+
+@app.post("/api/settings")
+async def settings_change(body: Settings):
+    if len(body.card_stats) > 50 or not all(_SETTING_KEY_RE.match(k) for k in body.card_stats):
+        return _bad_request("Invalid stat keys.")
+    path = _settings_file()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"card_stats": body.card_stats}, indent=2))
+        tmp.replace(path)
+    except OSError:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Can't write settings under {path.parent}."},
+        )
+    return {"card_stats": body.card_stats}
+
+
 # Live position over RCON (online players only) — lets the UI capture "where
 # I'm standing" as a waypoint instead of typing coordinates.
 _POS_DATA_RE = re.compile(r"\[(-?[\d.]+)d?, (-?[\d.]+)d?, (-?[\d.]+)d?\]")
@@ -408,6 +450,47 @@ def _name_uuid_pairs(data: Path) -> list[tuple[str, str]] | None:
     return pairs if found else None
 
 
+def _top_entry(section: dict) -> dict | None:
+    if not section:
+        return None
+    entity, count = max(section.items(), key=lambda kv: kv[1])
+    return {"id": entity, "count": count}
+
+
+def _stats_fields(stats: dict) -> dict:
+    """Every card stat derivable from one player's stats JSON. The frontend's
+    stats.js registry decides which of these actually render."""
+    sections = stats.get("stats", {})
+    custom = sections.get("minecraft:custom", {})
+    mined = sections.get("minecraft:mined", {})
+    out: dict = {}
+    for key in _PLAY_TIME_KEYS:
+        if key in custom:
+            out["hours"] = round(custom[key] / 72000, 1)  # 20 ticks/second
+            break
+    for out_key, stat in (
+        ("deaths", "deaths"), ("mob_kills", "mob_kills"), ("player_kills", "player_kills"),
+        ("sleep_count", "sleep_in_bed"), ("enchanted", "enchant_item"),
+        ("fish_caught", "fish_caught"), ("animals_bred", "animals_bred"),
+        ("trades", "traded_with_villager"),
+        ("damage_dealt", "damage_dealt"), ("damage_taken", "damage_taken"),  # 10 = 1 heart
+    ):
+        out[out_key] = custom.get(f"minecraft:{stat}", 0)
+    out["life_s"] = custom.get("minecraft:time_since_death", 0) // 20
+    out["since_sleep_s"] = custom.get("minecraft:time_since_rest", 0) // 20
+    out["aviate_cm"] = custom.get("minecraft:aviate_one_cm", 0)
+    out["distance_cm"] = sum(
+        v for k, v in custom.items()
+        if k.endswith("_one_cm") and k != "minecraft:aviate_one_cm")
+    out["mined_total"] = sum(mined.values())
+    out["diamonds"] = (mined.get("minecraft:diamond_ore", 0)
+                       + mined.get("minecraft:deepslate_diamond_ore", 0))
+    out["crafted_total"] = sum(sections.get("minecraft:crafted", {}).values())
+    out["nemesis"] = _top_entry(sections.get("minecraft:killed_by", {}))
+    out["top_victim"] = _top_entry(sections.get("minecraft:killed", {}))
+    return out
+
+
 @app.get("/api/playerstats")
 async def playerstats():
     data = _data_dir()
@@ -422,19 +505,21 @@ async def playerstats():
             continue
         stats_dir, playerdata_dir = dirs
         info: dict = {"last_seen": None, "hours": None}
+        pdata_path = playerdata_dir / f"{uuid}.dat"
         try:
-            info["last_seen"] = int((playerdata_dir / f"{uuid}.dat").stat().st_mtime)
+            info["last_seen"] = int(pdata_path.stat().st_mtime)
         except OSError:
             pass
         try:
-            stats = json.loads((stats_dir / f"{uuid}.json").read_text())
-            custom = stats.get("stats", {}).get("minecraft:custom", {})
-            for key in _PLAY_TIME_KEYS:
-                if key in custom:
-                    info["hours"] = round(custom[key] / 72000, 1)  # 20 ticks/second
-                    break
+            info.update(_stats_fields(json.loads((stats_dir / f"{uuid}.json").read_text())))
         except (OSError, ValueError):
             pass
+        raw = _read_nbt_file(pdata_path)  # XP/health/hunger, as of the last save
+        if raw is not None:
+            info["xp_level"] = _nbt_int(raw, b"XpLevel")
+            health = _nbt_float(raw, b"Health")
+            info["health"] = round(health, 1) if health is not None else None
+            info["food"] = _nbt_int(raw, b"foodLevel")
         players[name] = info
     return {"players": players}
 
@@ -455,6 +540,24 @@ def _nbt_byte(raw: bytes, name: bytes) -> int | None:
     pat = b"\x01" + len(name).to_bytes(2, "big") + name
     i = raw.find(pat)
     return raw[i + len(pat)] if i >= 0 else None
+
+
+def _nbt_int(raw: bytes, name: bytes) -> int | None:
+    pat = b"\x03" + len(name).to_bytes(2, "big") + name
+    i = raw.find(pat)
+    if i < 0:
+        return None
+    j = i + len(pat)
+    return int.from_bytes(raw[j:j + 4], "big", signed=True)
+
+
+def _nbt_float(raw: bytes, name: bytes) -> float | None:
+    pat = b"\x05" + len(name).to_bytes(2, "big") + name
+    i = raw.find(pat)
+    if i < 0:
+        return None
+    j = i + len(pat)
+    return struct.unpack(">f", raw[j:j + 4])[0]
 
 
 def _nbt_long_after(raw: bytes, anchor: bytes, name: bytes) -> int | None:
