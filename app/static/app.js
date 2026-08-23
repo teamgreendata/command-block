@@ -1,5 +1,6 @@
 import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick, buildWaypointTp } from './quick-commands.js';
 import { CARD_STATS, DEFAULT_CARD_STATS, fmtDuration } from './stats.js';
+import { topEntries, deathAnalysis, movementRows, damageRows, leftoverCustom } from './detail.js';
 
 const $ = s => document.querySelector(s);
 const stripCodes = s => String(s).replace(/§./g, '');
@@ -74,13 +75,17 @@ function fillList(ul, items, emptyText) {
 const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'settings', 'logs'];
 
 function showTab(name) {
-  if (!TABS.includes(name)) name = 'dashboard';
+  // #player/<name> is a virtual page: the per-player analytics view
+  const player = name.startsWith('player/') ? decodeURIComponent(name.slice(7)) : null;
+  if (!player && !TABS.includes(name)) name = 'dashboard';
   for (const t of TABS) {
-    document.getElementById(`page-${t}`).classList.toggle('active', t === name);
+    document.getElementById(`page-${t}`).classList.toggle('active', !player && t === name);
   }
+  document.getElementById('page-player').classList.toggle('active', !!player);
   for (const b of document.querySelectorAll('#tabs .tab')) {
-    b.classList.toggle('active', b.dataset.tab === name);
+    b.classList.toggle('active', !player && b.dataset.tab === name);
   }
+  if (player) renderPlayerDetail(player);
 }
 
 for (const b of document.querySelectorAll('#tabs .tab')) {
@@ -510,8 +515,10 @@ function playerCard(name, isOnline) {
 
   const id = document.createElement('div');
   id.className = 'pc-id';
-  const nm = document.createElement('div');
+  const nm = document.createElement('a');
   nm.className = 'pc-name';
+  nm.href = `#player/${encodeURIComponent(name)}`;
+  nm.title = 'full stat breakdown';
   nm.textContent = name;
   const state = document.createElement('div');
   state.className = 'pc-state';
@@ -586,6 +593,177 @@ function playerCard(name, isOnline) {
 
   card.appendChild(form);
   return card;
+}
+
+// ---------------------------------------------------------------- player detail page
+
+const numFmt = v => (v ?? 0).toLocaleString('en-US');
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+function detailPanel(title, ...children) {
+  const panel = el('section', 'panel detail-panel');
+  panel.appendChild(el('h2', null, title));
+  for (const c of children) if (c) panel.appendChild(c);
+  return panel;
+}
+
+// Single-measure horizontal bar table: label | bar | value. One hue per
+// table (barClass), values always visible as text.
+function barTable(top, barClass, emptyText) {
+  const wrap = el('div', 'bar-table');
+  if (!top.rows.length) {
+    wrap.appendChild(el('p', 'empty', emptyText));
+    return wrap;
+  }
+  for (const r of top.rows) {
+    const label = el('span', 'bt-label', r.label);
+    if (r.id) label.title = r.id;
+    const track = el('div', 'bt-track');
+    const fill = el('div', `bt-fill ${barClass}`);
+    fill.style.width = `${r.pct}%`;
+    track.appendChild(fill);
+    wrap.appendChild(label);
+    wrap.appendChild(track);
+    wrap.appendChild(el('span', 'bt-value', r.text));
+  }
+  if (top.more) wrap.appendChild(el('p', 'bt-more empty', `+ ${top.more} more kinds`));
+  return wrap;
+}
+
+function plainRows(top, emptyText) {
+  const wrap = el('div', 'kv-rows');
+  if (!top.rows.length) {
+    wrap.appendChild(el('p', 'empty', emptyText));
+    return wrap;
+  }
+  for (const r of top.rows) {
+    const kv = el('div', 'kv');
+    const label = el('span', 'bt-label', r.label);
+    if (r.id) label.title = r.id;
+    kv.appendChild(label);
+    kv.appendChild(el('span', 'bt-value', r.text));
+    wrap.appendChild(kv);
+  }
+  if (top.more) wrap.appendChild(el('p', 'bt-more empty', `+ ${top.more} more`));
+  return wrap;
+}
+
+function statTile(label, value) {
+  const tile = el('div', 'tile');
+  tile.appendChild(el('div', 'tile-v', value));
+  tile.appendChild(el('div', 'tile-l', label));
+  return tile;
+}
+
+async function renderPlayerDetail(name) {
+  const wrap = $('#player-detail');
+  wrap.replaceChildren(el('p', 'empty', 'loading…'));
+  let d;
+  try {
+    d = await api(`/api/playerdetail/${encodeURIComponent(name)}`);
+  } catch (e) {
+    wrap.replaceChildren(el('p', 'empty', e.message));
+    return;
+  }
+  const sections = d.sections || {};
+  const custom = sections['minecraft:custom'] || {};
+  wrap.replaceChildren();
+
+  // header: avatar + name + hero numbers
+  const head = el('section', 'panel detail-panel detail-head');
+  const img = el('img', 'avatar');
+  img.alt = '';
+  img.src = `/api/avatar/${d.name}?full=1`;
+  img.addEventListener('error', () => { img.src = FALLBACK_BODY; }, { once: true });
+  head.appendChild(img);
+  const hd = el('div', 'dh-main');
+  const nameRow = el('div', 'dh-name-row');
+  nameRow.appendChild(el('h2', 'dh-name', d.name));
+  const online = lastOnline.includes(d.name);
+  const dot = el('span', online ? 'dot online' : 'dot');
+  nameRow.appendChild(dot);
+  nameRow.appendChild(el('span', 'pc-state', online ? 'online' : 'offline'));
+  const back = el('button', 'small', '< Dashboard');
+  back.type = 'button';
+  back.addEventListener('click', () => { location.hash = 'dashboard'; });
+  nameRow.appendChild(back);
+  hd.appendChild(nameRow);
+  const mined = topEntries(sections['minecraft:mined'] || {}, 1);
+  const tiles = el('div', 'tile-row');
+  const playTicks = custom['minecraft:play_time'] ?? custom['minecraft:play_one_minute'];
+  tiles.appendChild(statTile('played', playTicks != null ? `${(playTicks / 72000).toFixed(1)} h` : '–'));
+  tiles.appendChild(statTile('deaths', numFmt(custom['minecraft:deaths'])));
+  tiles.appendChild(statTile('mob kills', numFmt(custom['minecraft:mob_kills'])));
+  tiles.appendChild(statTile('blocks mined', numFmt(mined.total)));
+  tiles.appendChild(statTile('XP level', d.xp_level != null ? String(d.xp_level) : '–'));
+  tiles.appendChild(statTile('HP / food', d.health != null ? `${d.health} / ${d.food}` : '–'));
+  hd.appendChild(tiles);
+  head.appendChild(hd);
+  wrap.appendChild(head);
+
+  // deaths: mobs itemized; the rest is environmental (game doesn't itemize it)
+  const deaths = deathAnalysis(sections);
+  const deathsPanel = detailPanel(`Deaths — ${numFmt(deaths.total)}`,
+    barTable(deaths.byMob, 'bar-red', 'never died to a mob'));
+  if (deaths.environmental) {
+    deathsPanel.appendChild(el('p', 'quick-desc',
+      `plus ${numFmt(deaths.environmental)} environmental (fall, lava, drowning… — the game doesn’t itemize these)`));
+  }
+  wrap.appendChild(deathsPanel);
+
+  const killed = topEntries(sections['minecraft:killed'] || {}, 12);
+  const combatPanel = detailPanel(`Enemies killed — ${numFmt(killed.total)}`,
+    barTable(killed, 'bar-gold', 'no kills yet'));
+  const dmg = damageRows(custom);
+  if (dmg.length) {
+    combatPanel.appendChild(el('h3', null, 'Damage'));
+    combatPanel.appendChild(plainRows({ rows: dmg, more: 0 }, ''));
+  }
+  wrap.appendChild(combatPanel);
+
+  const allMined = topEntries(sections['minecraft:mined'] || {}, 12);
+  wrap.appendChild(detailPanel(`Blocks harvested — ${numFmt(allMined.total)}`,
+    barTable(allMined, 'bar-cyan', 'nothing mined yet')));
+
+  const move = movementRows(custom);
+  const totalCm = move.reduce((s, r) => s + r.cm, 0);
+  wrap.appendChild(detailPanel(
+    `Movement — ${totalCm >= 100000 ? `${(totalCm / 100000).toFixed(1)} km` : `${Math.round(totalCm / 100)} m`}`,
+    barTable({ rows: move, more: 0 }, 'bar-green', 'hasn’t moved yet')));
+
+  // items: three measures side by side, plain counts (no bars across measures)
+  const cols = el('div', 'item-cols');
+  for (const [title, section, empty] of [
+    ['Used / placed', sections['minecraft:used'], 'nothing used yet'],
+    ['Crafted', sections['minecraft:crafted'], 'nothing crafted yet'],
+    ['Tools worn out', sections['minecraft:broken'], 'nothing broken yet'],
+  ]) {
+    const col = el('div', 'item-col');
+    const top = topEntries(section || {}, 8);
+    col.appendChild(el('h3', null, `${title} — ${numFmt(top.total)}`));
+    col.appendChild(plainRows(top, empty));
+    cols.appendChild(col);
+  }
+  const itemsPanel = detailPanel('Items', cols);
+  itemsPanel.classList.add('wide');
+  const pickedUp = topEntries(sections['minecraft:picked_up'] || {}, 1).total;
+  const dropped = topEntries(sections['minecraft:dropped'] || {}, 1).total;
+  itemsPanel.appendChild(el('p', 'quick-desc',
+    `${numFmt(pickedUp)} items picked up · ${numFmt(dropped)} dropped`));
+  wrap.appendChild(itemsPanel);
+
+  const leftover = leftoverCustom(custom);
+  if (leftover.length) {
+    const more = detailPanel('Everything else', plainRows({ rows: leftover, more: 0 }, ''));
+    more.classList.add('wide');
+    wrap.appendChild(more);
+  }
 }
 
 // ---------------------------------------------------------------- restart

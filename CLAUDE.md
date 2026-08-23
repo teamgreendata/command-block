@@ -30,8 +30,8 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 53 tests, no network, no MC server
-node --test                                   # frontend builders + stat formatters: 37 tests (bare, not `node --test tests/`)
+.venv/bin/python -m pytest                    # backend: 55 tests, no network, no MC server
+node --test                                   # frontend builders + stat/detail transforms: 45 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
 ```
@@ -115,6 +115,15 @@ template (set empty to disable avatar fetching).
   grabs an online player's spot via `data get entity` for the capture-position button.
   Waypoint teleports go through `buildWaypointTp` — `execute in <dim> run tp` whenever
   the waypoint recorded a dimension, so cross-dimension teleports work.
+- **Per-player analytics page**: clicking a card's name routes to the virtual hash page
+  `#player/<name>` (not a tab), rendered from `GET /api/playerdetail/{name}` — the raw
+  stat sections passthrough (name resolved case-insensitively to canonical case). The
+  breakdown math lives in `app/static/detail.js` (DOM-free, node-tested): top-N bar
+  tables per section, deaths split into itemized mob deaths + a derived environmental
+  remainder (vanilla doesn't itemize fall/lava/drowning), damage in hearts, movement per
+  `*_one_cm` counter, and an auto-formatted "everything else" long tail. Bar charts are
+  single-hue per panel (MC chat colors, values always visible as text) — keep it that
+  way; don't mix hues within one bar table.
 - UI structure: seven hash-routed tabs — **Dashboard** (Global commands across the top +
   a full-body card per whitelisted/online player), **Server Info** (status/facts +
   world panel), **Console**, **Whitelist**, **Waypoints**, **Settings** (card-stat

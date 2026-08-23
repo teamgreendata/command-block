@@ -491,6 +491,41 @@ def _stats_fields(stats: dict) -> dict:
     return out
 
 
+@app.get("/api/playerdetail/{name}")
+async def playerdetail(name: str):
+    """Full raw stat sections for one player — the analytics page's data. The
+    frontend (detail.js) does all the breakdown math."""
+    if not _NAME_RE.match(name):
+        return _bad_request("Invalid player name (letters, digits, underscore; max 16).")
+    data = _data_dir()
+    match = next(
+        (p for p in (_name_uuid_pairs(data) or []) if p[0].lower() == name.lower()), None)
+    if match is None:
+        return JSONResponse(status_code=404, content={"error": f"Unknown player {name}."})
+    canonical, uuid = match
+    dirs = _player_dirs(data)
+    if dirs is None:
+        return JSONResponse(status_code=404, content={"error": "World data not found."})
+    stats_dir, playerdata_dir = dirs
+    out: dict = {"name": canonical, "last_seen": None, "sections": {}}
+    pdata_path = playerdata_dir / f"{uuid}.dat"
+    try:
+        out["last_seen"] = int(pdata_path.stat().st_mtime)
+    except OSError:
+        pass
+    try:
+        out["sections"] = json.loads((stats_dir / f"{uuid}.json").read_text()).get("stats", {})
+    except (OSError, ValueError):
+        pass
+    raw = _read_nbt_file(pdata_path)
+    if raw is not None:
+        out["xp_level"] = _nbt_int(raw, b"XpLevel")
+        health = _nbt_float(raw, b"Health")
+        out["health"] = round(health, 1) if health is not None else None
+        out["food"] = _nbt_int(raw, b"foodLevel")
+    return out
+
+
 @app.get("/api/playerstats")
 async def playerstats():
     data = _data_dir()

@@ -4,7 +4,9 @@ A small self-hosted admin dashboard for the Minecraft server stack — live stat
 with an in-game clock/weather widget, a Server Info tab (day count, uptime, world
 size, seed, MSPT, distances…), a card per player with their full-body skin render
 and a configurable stat list (last seen, hours played, deaths, kills, nemesis,
-distance, diamonds, XP and a dozen more — pick which on the Settings tab), plus
+distance, diamonds, XP and a dozen more — pick which on the Settings tab), a
+per-player analytics page (click the name: deaths by cause, kills, blocks
+harvested, items used/crafted/worn out, movement — all as breakdowns), plus
 the player-targeted commands right on the card
 (teleport, give, effect, gamemode, XP, message, summon, clear, kill, kick, ban),
 global commands with one-click presets (time, weather, game rules, difficulty),

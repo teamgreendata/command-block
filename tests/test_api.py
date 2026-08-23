@@ -424,6 +424,28 @@ def test_playerstats_full_stat_fields(client, mc_data):
     assert (alice["xp_level"], alice["health"], alice["food"]) == (27, 19.0, 18)
 
 
+def test_playerdetail_returns_raw_sections(client, mc_data):
+    stats = {"stats": {
+        "minecraft:custom": {"minecraft:deaths": 3},
+        "minecraft:killed_by": {"minecraft:creeper": 2},
+    }}
+    (mc_data / "world" / "stats" / f"{UUID_A}.json").write_text(json.dumps(stats))
+    (mc_data / "world" / "playerdata" / f"{UUID_A}.dat").write_bytes(
+        _nbt_playerdata(xp=8, health=14.0, food=17))
+    r = client.get("/api/playerdetail/ALICE")  # any case resolves
+    assert r.status_code == 200
+    d = r.json()
+    assert d["name"] == "alice"  # canonical case from usercache/whitelist
+    assert d["sections"]["minecraft:killed_by"] == {"minecraft:creeper": 2}
+    assert (d["xp_level"], d["health"], d["food"]) == (8, 14.0, 17)
+    assert isinstance(d["last_seen"], int)
+
+
+def test_playerdetail_unknown_and_invalid_names(client, mc_data):
+    assert client.get("/api/playerdetail/nobody").status_code == 404
+    assert client.get("/api/playerdetail/bad%20name").status_code == 400
+
+
 def test_settings_roundtrip_and_validation(client, wp_dir):
     assert client.get("/api/settings").json() == {"card_stats": None}  # unset -> frontend defaults
     r = client.post("/api/settings", json={"card_stats": ["hours", "deaths", "xp"]})

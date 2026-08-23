@@ -334,6 +334,50 @@ select:focus { outline: none; border-color: #fff; }
 .pc-form .qf { flex: 1 1 6.5rem; }
 .pc-form .qf label { color: #2f2f2f; }
 
+/* ----- per-player analytics page ----- */
+#page-player.active { grid-template-columns: 1fr; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 750px) { .detail-grid { grid-template-columns: 1fr; } }
+.detail-panel { min-height: 0; }
+.detail-head, .detail-grid .wide { grid-column: 1 / -1; }
+.detail-head { flex-direction: row; gap: 1.1rem; align-items: flex-start; }
+.dh-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.9rem; }
+.dh-name-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.dh-name { margin: 0; font-size: 1.25rem; font-weight: normal; color: #fff; text-shadow: 2px 2px 0 #3f3f3f; }
+.dh-name-row button { margin-left: auto; }
+.tile-row { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.tile {
+  background: #8b8b8b;
+  box-shadow: inset 2px 2px 0 #373737, inset -2px -2px 0 #ffffff;
+  padding: 0.5rem 0.9rem;
+  min-width: 7rem;
+}
+.tile-v { color: #fff; text-shadow: 2px 2px 0 #3f3f3f; font-size: 1.05rem; }
+.tile-l { color: #2f2f2f; font-size: 0.7rem; }
+
+/* bar tables: label | track | value — one hue per table, values always text */
+.bar-table {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 1fr minmax(3.5rem, auto);
+  gap: 0.3rem 0.6rem;
+  align-items: center;
+}
+.bt-label { font-size: 0.78rem; color: var(--ink); overflow-wrap: anywhere; }
+.bt-track { background: #000; border: 2px solid #555; height: 12px; box-sizing: content-box; }
+.bt-fill { height: 100%; }
+.bar-red { background: var(--red); }
+.bar-gold { background: var(--gold); }
+.bar-cyan { background: #55ffff; }
+.bar-green { background: var(--green); }
+.bt-value { font-size: 0.78rem; text-align: right; color: var(--ink); }
+.bt-more { grid-column: 1 / -1; font-size: 0.72rem; margin: 0.15rem 0 0; }
+.kv-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.25rem 1.4rem; }
+.kv { display: flex; justify-content: space-between; gap: 0.6rem; align-items: baseline; }
+.item-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.2rem; }
+.item-cols h3 { margin-top: 0; }
+a.pc-name { text-decoration: none; }
+a.pc-name:hover { text-decoration: underline; }
+
 /* Chat-window scrollback: white text on black, gold for sent commands */
 .scrollback {
   flex: 1;
