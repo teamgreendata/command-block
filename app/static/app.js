@@ -1,6 +1,6 @@
 import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick, buildWaypointTp } from './quick-commands.js';
 import { CARD_STATS, DEFAULT_CARD_STATS, fmtDuration } from './stats.js';
-import { topEntries, deathAnalysis, movementRows, damageRows, leftoverCustom } from './detail.js';
+import { topEntries, deathAnalysis, movementRows, damageRows, interactionRows, leftoverCustom } from './detail.js';
 
 const $ = s => document.querySelector(s);
 const stripCodes = s => String(s).replace(/§./g, '');
@@ -758,11 +758,13 @@ async function renderPlayerDetail(name) {
     `${numFmt(pickedUp)} items picked up · ${numFmt(dropped)} dropped`));
   wrap.appendChild(itemsPanel);
 
+  const interactions = interactionRows(custom, 12);
+  wrap.appendChild(detailPanel(`Interactions — ${numFmt(interactions.total)}`,
+    barTable(interactions, 'bar-white', 'no interactions yet')));
+
   const leftover = leftoverCustom(custom);
   if (leftover.length) {
-    const more = detailPanel('Everything else', plainRows({ rows: leftover, more: 0 }, ''));
-    more.classList.add('wide');
-    wrap.appendChild(more);
+    wrap.appendChild(detailPanel('Everything else', plainRows({ rows: leftover, more: 0 }, '')));
   }
 }
 

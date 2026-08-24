@@ -31,7 +31,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/python -m pytest                    # backend: 55 tests, no network, no MC server
-node --test                                   # frontend builders + stat/detail transforms: 45 tests (bare, not `node --test tests/`)
+node --test                                   # frontend builders + stat/detail transforms: 46 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
 ```
@@ -121,9 +121,17 @@ template (set empty to disable avatar fetching).
   breakdown math lives in `app/static/detail.js` (DOM-free, node-tested): top-N bar
   tables per section, deaths split into itemized mob deaths + a derived environmental
   remainder (vanilla doesn't itemize fall/lava/drowning), damage in hearts, movement per
-  `*_one_cm` counter, and an auto-formatted "everything else" long tail. Bar charts are
+  `*_one_cm` counter, an Interactions panel (`interact_with_*`/`open_*`/`inspect_*` +
+  curated keys), and an auto-formatted "everything else" long tail. Bar charts are
   single-hue per panel (MC chat colors, values always visible as text) — keep it that
   way; don't mix hues within one bar table.
+- ⚠️ **The container must run as uid 1000** (same as the minecraft container's user):
+  the server writes playerdata `.dat` files as mode **600**, so any other uid gets
+  permission-denied and XP/health/food silently null out — while the stats JSONs (664)
+  and mtimes still work, which masks the problem. The entrypoint starts as root only to
+  chown `/cb-data` (self-heal from older uid-10001 images), then drops to `dash` via
+  setpriv. Local pytest runs as the file owner and can't catch this class of bug — check
+  file *modes*, not just readability, when adding new file-reading features.
 - UI structure: seven hash-routed tabs — **Dashboard** (Global commands across the top +
   a full-body card per whitelisted/online player), **Server Info** (status/facts +
   world panel), **Console**, **Whitelist**, **Waypoints**, **Settings** (card-stat

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { topEntries, deathAnalysis, movementRows, damageRows, fmtCustomValue, leftoverCustom } from '../app/static/detail.js';
+import { topEntries, deathAnalysis, movementRows, damageRows, fmtCustomValue, interactionRows, leftoverCustom } from '../app/static/detail.js';
 
 test('topEntries sorts, cuts and scales bars to the max', () => {
   const top = topEntries({ 'minecraft:stone': 500, 'minecraft:diamond_ore': 5, 'minecraft:dirt': 250 }, 2);
@@ -58,14 +58,29 @@ test('fmtCustomValue picks distance/duration/count by key shape', () => {
   assert.equal(fmtCustomValue('minecraft:jump', 1234), '1,234');
 });
 
-test('leftoverCustom excludes covered keys but keeps the long tail', () => {
+test('interactionRows collects world-object interactions with short labels', () => {
+  const top = interactionRows({
+    'minecraft:open_chest': 321,
+    'minecraft:interact_with_crafting_table': 812,
+    'minecraft:traded_with_villager': 33,
+    'minecraft:inspect_hopper': 4,
+    'minecraft:jump': 45213,             // not an interaction
+    'minecraft:animals_bred': 7,         // not an interaction
+  });
+  assert.deepEqual(top.rows.map(r => r.label),
+    ['Crafting Table', 'Open Chest', 'Traded With Villager', 'Inspect Hopper']);
+  assert.equal(top.total, 812 + 321 + 33 + 4);
+});
+
+test('leftoverCustom excludes covered keys and interactions, keeps the long tail', () => {
   const rows = leftoverCustom({
     'minecraft:deaths': 5,               // covered by the deaths panel
     'minecraft:damage_taken': 100,       // covered by the combat panel
     'minecraft:walk_one_cm': 5,          // covered by movement
-    'minecraft:open_chest': 321,
+    'minecraft:open_chest': 321,         // covered by interactions
+    'minecraft:interact_with_anvil': 9,  // covered by interactions
     'minecraft:animals_bred': 7,
+    'minecraft:jump': 12,
   });
-  assert.deepEqual(rows.map(r => r.label), ['Animals Bred', 'Open Chest']);
-  assert.equal(rows.find(r => r.label === 'Open Chest').text, '321');
+  assert.deepEqual(rows.map(r => r.label), ['Animals Bred', 'Jump']);
 });

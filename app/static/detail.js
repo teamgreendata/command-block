@@ -60,6 +60,33 @@ export function damageRows(custom = {}) {
     .map(([k, label]) => ({ label, text: `${num(Math.round(custom[k] / 20))} hearts` }));
 }
 
+// World-object interactions get their own panel: chests opened, workstations
+// used, villagers talked to, note blocks played…
+const INTERACTION_KEYS = new Set([
+  'talked_to_villager', 'traded_with_villager', 'bell_ring', 'play_noteblock',
+  'tune_noteblock', 'play_record', 'pot_flower', 'eat_cake_slice',
+  'trigger_trapped_chest', 'use_cauldron', 'fill_cauldron',
+  'clean_armor', 'clean_banner', 'clean_shulker_box',
+]);
+
+function isInteraction(bare) {
+  return bare.startsWith('interact_with_') || bare.startsWith('open_')
+    || bare.startsWith('inspect_') || INTERACTION_KEYS.has(bare);
+}
+
+export function interactionRows(custom = {}, n = 12) {
+  const section = {};
+  for (const [k, v] of Object.entries(custom)) {
+    if (isInteraction(k.replace(/^minecraft:/, ''))) section[k] = v;
+  }
+  const top = topEntries(section, n);
+  for (const r of top.rows) {
+    // "interact_with_crafting_table" → "Crafting Table"; others keep the verb
+    r.label = prettyId(r.id.replace(/^minecraft:/, '').replace(/^interact_with_/, ''));
+  }
+  return top;
+}
+
 // Custom counters in ticks (20/s) that read as durations.
 const TICK_KEYS = /(^|_)(time|one_minute)($|_)|_since_/;
 // Covered by a dedicated spot on the page — everything else lands in "More".
@@ -76,7 +103,8 @@ export function fmtCustomValue(key, v) {
 
 export function leftoverCustom(custom = {}) {
   return Object.entries(custom)
-    .filter(([k]) => !k.endsWith('_one_cm') && !k.startsWith('minecraft:damage_') && !COVERED.has(k))
+    .filter(([k]) => !k.endsWith('_one_cm') && !k.startsWith('minecraft:damage_')
+      && !COVERED.has(k) && !isInteraction(k.replace(/^minecraft:/, '')))
     .map(([k, v]) => ({
       label: prettyId(k.replace(/^minecraft:/, '')),
       text: fmtCustomValue(k, v),

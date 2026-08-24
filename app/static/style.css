@@ -369,6 +369,7 @@ select:focus { outline: none; border-color: #fff; }
 .bar-gold { background: var(--gold); }
 .bar-cyan { background: #55ffff; }
 .bar-green { background: var(--green); }
+.bar-white { background: #e8e8e8; }
 .bt-value { font-size: 0.78rem; text-align: right; color: var(--ink); }
 .bt-more { grid-column: 1 / -1; font-size: 0.72rem; margin: 0.15rem 0 0; }
 .kv-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.25rem 1.4rem; }
