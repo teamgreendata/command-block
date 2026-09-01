@@ -72,7 +72,7 @@ function fillList(ul, items, emptyText) {
 
 // ---------------------------------------------------------------- tabs
 
-const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'settings', 'logs'];
+const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'recovery', 'settings', 'logs'];
 
 function showTab(name) {
   // #player/<name> is a virtual page: the per-player analytics view
@@ -404,8 +404,7 @@ $('#waypoint-form').addEventListener('submit', async e => {
   } catch (err) { flash(err.message, true); }
 });
 
-function updateGrabSelect(names) {
-  const sel = $('#wp-grab-player');
+function fillPlayerSelect(sel, names) {
   const prev = sel.value;
   sel.replaceChildren(...names.map(n => {
     const o = document.createElement('option');
@@ -413,7 +412,12 @@ function updateGrabSelect(names) {
     return o;
   }));
   if (names.includes(prev)) sel.value = prev;
+}
+
+function updateGrabSelect(names) {
+  fillPlayerSelect($('#wp-grab-player'), names);
   $('#wp-grab-btn').disabled = !names.length;
+  fillPlayerSelect($('#rec-target'), names);
 }
 
 $('#wp-grab-btn').addEventListener('click', async () => {
@@ -426,6 +430,106 @@ $('#wp-grab-btn').addEventListener('click', async () => {
     flash(`Grabbed ${who}’s position — name it and add.`);
     $('#wp-name').focus();
   } catch (e) { flash(e.message, true); }
+});
+
+// ---------------------------------------------------------------- gear recovery
+
+let recoveryItems = [];
+
+async function refreshRecoverySources() {
+  try {
+    const s = await api('/api/recovery/sources');
+    const sel = $('#rec-source');
+    const now = Math.floor(Date.now() / 1000);
+    sel.replaceChildren(...s.sources.map(src => {
+      const o = document.createElement('option');
+      o.value = JSON.stringify({ player: src.player, which: src.which });
+      const age = src.mtime ? ` (saved ${timeAgoText(now - src.mtime)})` : '';
+      o.textContent = `${src.player} — ${src.which} save${age}`;
+      return o;
+    }));
+    if (!s.sources.length) {
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = 'no saves found…';
+      sel.appendChild(o);
+    }
+  } catch { /* leave as-is */ }
+}
+
+function timeAgoText(secondsAgo) {
+  if (secondsAgo < 90) return 'just now';
+  const m = Math.floor(secondsAgo / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} h ago`;
+  return `${Math.floor(h / 24)} days ago`;
+}
+
+function renderRecovery(items) {
+  recoveryItems = items;
+  const wrap = $('#rec-items');
+  wrap.replaceChildren();
+  $('#rec-give-all').disabled = !items.length;
+  if (!items.length) {
+    wrap.appendChild(el('p', 'empty', 'that save has an empty inventory'));
+    return;
+  }
+  for (const item of items) {
+    const row = el('div', 'rec-item');
+    row.appendChild(el('span', 'rec-where', item.where));
+    const label = el('span', 'rec-name',
+      `${item.id.replace(/^minecraft:/, '').replace(/_/g, ' ')}${item.count > 1 ? ` ×${item.count}` : ''}`);
+    label.title = `give <player> ${item.item_part}`;
+    row.appendChild(label);
+    row.appendChild(el('span', 'rec-detail',
+      item.enchants.length ? item.enchants.join(', ')
+        : item.components ? `${item.components} component${item.components > 1 ? 's' : ''}` : ''));
+    const btn = el('button', 'small', 'Give');
+    btn.type = 'button';
+    btn.addEventListener('click', () => giveRecovered(item));
+    row.appendChild(btn);
+    wrap.appendChild(row);
+  }
+}
+
+function giveRecovered(item) {
+  const target = $('#rec-target').value;
+  if (!target) { flash('Nobody online to give to.', true); return; }
+  sendRaw(`give ${target} ${item.item_part}`);
+  flash(`Sent — check ${target}'s inventory (response is in the Console tab).`);
+}
+
+$('#rec-read').addEventListener('click', async () => {
+  const v = $('#rec-source').value;
+  if (!v) return;
+  try {
+    const r = await api('/api/recovery/read', JSON.parse(v));
+    renderRecovery(r.items);
+  } catch (e) { flash(e.message, true); }
+});
+
+$('#rec-file').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const res = await fetch('/api/recovery/upload', { method: 'POST', body: await file.arrayBuffer() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    renderRecovery(data.items);
+    flash(`Read ${data.items.length} items from ${file.name}.`);
+  } catch (err) { flash(err.message, true); }
+  e.target.value = '';
+});
+
+$('#rec-give-all').addEventListener('click', async () => {
+  const target = $('#rec-target').value;
+  if (!target) { flash('Nobody online to give to.', true); return; }
+  if (!confirm(`Give all ${recoveryItems.length} items to ${target}?`)) return;
+  for (const item of recoveryItems) {
+    await sendRaw(`give ${target} ${item.item_part}`);
+  }
+  flash(`Sent ${recoveryItems.length} items to ${target} — responses are in the Console tab.`);
 });
 
 // ---------------------------------------------------------------- settings
@@ -1057,6 +1161,7 @@ renderGlobalFields(GLOBAL_COMMANDS[0]);
 renderCards();
 refreshSettings();
 refreshWaypoints();
+refreshRecoverySources();
 refreshStatus();
 refreshClock();
 refreshServerInfo();

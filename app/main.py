@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from mcstatus import JavaServer
 from pydantic import BaseModel
 
-from app import rcon
+from app import nbt, rcon
 from app.rcon import RconError
 
 PING_PORT = 25565  # server-list ping; RCON port comes from the env
@@ -165,6 +165,11 @@ class WaypointChange(BaseModel):
 
 class Settings(BaseModel):
     card_stats: list[str]
+
+
+class RecoveryRead(BaseModel):
+    player: str
+    which: Literal["current", "previous"]
 
 
 # ---------------------------------------------------------------- endpoints
@@ -758,6 +763,97 @@ async def serverinfo():
         out["world_size_mb"] = round(size / 1e6, 1)
     out["day"] = _read_day(data)
     return out
+
+
+# ---------------------------------------------------------------- gear recovery
+
+# Reads an inventory out of a playerdata .dat (the live one, the previous
+# save, or an uploaded backup) and turns each item into a give-ready string —
+# components (enchantments, names, …) round-trip verbatim through app.nbt.
+# Strictly read-only on world files; the actual gives go through /api/command.
+
+
+def _inventory_items(root: dict) -> list[dict]:
+    items = []
+    for item in root.get("Inventory", []):
+        if not isinstance(item, dict) or "id" not in item:
+            continue
+        slot = int(item.get("Slot", 0))
+        comps = item.get("components", {})
+        item_part = str(item["id"])
+        if comps:
+            item_part += "[" + ",".join(f"{k}={nbt.snbt(v)}" for k, v in comps.items()) + "]"
+        count = int(item.get("count", 1))
+        if count > 1:
+            item_part += f" {count}"
+        ench = comps.get("minecraft:enchantments", {})
+        if isinstance(ench, dict) and isinstance(ench.get("levels"), dict):
+            ench = ench["levels"]  # older component layout
+        enchants = ([f"{k.split(':')[-1].replace('_', ' ')} {int(v)}" for k, v in ench.items()]
+                    if isinstance(ench, dict) else [])
+        where = ("armor" if 100 <= slot <= 103 else
+                 "offhand" if slot == -106 else
+                 "hotbar" if 0 <= slot <= 8 else "inventory")
+        items.append({"slot": slot, "where": where, "id": item["id"], "count": count,
+                      "enchants": enchants, "components": len(comps), "item_part": item_part})
+    order = {"armor": 0, "offhand": 1, "hotbar": 2, "inventory": 3}
+    items.sort(key=lambda i: (order[i["where"]], i["slot"]))
+    return items
+
+
+def _parse_recovery(blob: bytes):
+    try:
+        root = nbt.parse(blob)
+        items = _inventory_items(root)
+    except (ValueError, TypeError, KeyError):
+        return _bad_request("That file doesn't parse as playerdata NBT.")
+    return {"items": items, "xp_level": root.get("XpLevel")}
+
+
+@app.get("/api/recovery/sources")
+async def recovery_sources():
+    data = _data_dir()
+    dirs = _player_dirs(data)
+    sources = []
+    if dirs is not None:
+        playerdata_dir = dirs[1]
+        for name, uuid in (_name_uuid_pairs(data) or []):
+            for which, suffix in (("current", ".dat"), ("previous", ".dat_old")):
+                try:
+                    st = (playerdata_dir / f"{uuid}{suffix}").stat()
+                except OSError:
+                    continue
+                sources.append({"player": name, "which": which,
+                                "mtime": int(st.st_mtime), "size": st.st_size})
+    return {"sources": sources}
+
+
+@app.post("/api/recovery/read")
+async def recovery_read(body: RecoveryRead):
+    if not _NAME_RE.match(body.player):
+        return _bad_request("Invalid player name (letters, digits, underscore; max 16).")
+    data = _data_dir()
+    match = next(
+        (p for p in (_name_uuid_pairs(data) or []) if p[0].lower() == body.player.lower()), None)
+    dirs = _player_dirs(data)
+    if match is None or dirs is None:
+        return JSONResponse(status_code=404, content={"error": "Unknown player or no world data."})
+    suffix = ".dat" if body.which == "current" else ".dat_old"
+    try:
+        blob = (dirs[1] / f"{match[1]}{suffix}").read_bytes()
+    except OSError:
+        return JSONResponse(status_code=404, content={"error": f"No {body.which} save found."})
+    return _parse_recovery(blob)
+
+
+@app.post("/api/recovery/upload")
+async def recovery_upload(request: Request):
+    blob = await request.body()
+    if not blob:
+        return _bad_request("Empty upload.")
+    if len(blob) > 5_000_000:
+        return _bad_request("File too large (5 MB max).")
+    return _parse_recovery(blob)
 
 
 # ---------------------------------------------------------------- avatars

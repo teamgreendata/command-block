@@ -26,6 +26,7 @@
   <button type="button" class="tab" data-tab="console">Console</button>
   <button type="button" class="tab" data-tab="whitelist">Whitelist</button>
   <button type="button" class="tab" data-tab="waypoints">Waypoints</button>
+  <button type="button" class="tab" data-tab="recovery">Recovery</button>
   <button type="button" class="tab" data-tab="settings">Settings</button>
   <button type="button" class="tab" data-tab="logs">Logs</button>
 </nav>
@@ -151,6 +152,26 @@
         <button id="wp-grab-btn" type="button">Grab</button>
       </div>
       <p class="quick-desc">Stand where the waypoint should be, grab the position, name it, add.</p>
+    </section>
+  </section>
+
+  <section class="tab-page" id="page-recovery">
+    <section class="panel" id="recovery-panel">
+      <h2>Gear recovery</h2>
+      <p class="quick-desc">Read an inventory out of a player save — the current one, the previous
+        save (.dat_old), or an uploaded backup .dat — then re-give the items. Read-only on the
+        world; each Give goes through the normal console.</p>
+      <div class="rec-controls">
+        <select id="rec-source"><option value="">no saves found…</option></select>
+        <button id="rec-read" type="button">Read inventory</button>
+        <label class="rec-upload">or a backup file: <input type="file" id="rec-file"></label>
+      </div>
+      <div class="rec-controls">
+        <label>give to</label>
+        <select id="rec-target"></select>
+        <button id="rec-give-all" type="button" disabled>Give everything</button>
+      </div>
+      <div id="rec-items"></div>
     </section>
   </section>
 

@@ -446,6 +446,65 @@ def test_playerdetail_unknown_and_invalid_names(client, mc_data):
     assert client.get("/api/playerdetail/bad%20name").status_code == 400
 
 
+def _inventory_dat() -> bytes:
+    """A playerdata .dat with a small but component-rich inventory."""
+    from tests.test_nbt import named, root, t_byte, t_compound, t_int, t_list, t_string
+
+    def item(slot, item_id, count, *components):
+        children = [
+            named(1, "Slot", t_byte(slot)),
+            named(8, "id", t_string(item_id)),
+            named(3, "count", t_int(count)),
+        ]
+        if components:
+            children.append(named(10, "components", t_compound(*components)))
+        return t_compound(*children)
+
+    return root(
+        named(3, "XpLevel", t_int(30)),
+        named(9, "Inventory", t_list(
+            10,
+            item(0, "minecraft:diamond_sword", 1, named(10, "minecraft:enchantments", t_compound(
+                named(3, "minecraft:sharpness", t_int(5)),
+                named(3, "minecraft:unbreaking", t_int(3)),
+            ))),
+            item(9, "minecraft:cooked_beef", 32),
+            item(103, "minecraft:netherite_helmet", 1),
+            item(-106, "minecraft:shield", 1),
+        )),
+    )
+
+
+def test_recovery_read_builds_give_parts(client, mc_data):
+    (mc_data / "world" / "playerdata" / f"{UUID_A}.dat_old").write_bytes(_inventory_dat())
+    r = client.post("/api/recovery/read", json={"player": "Alice", "which": "previous"})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["xp_level"] == 30
+    # armor first, then offhand, hotbar, inventory
+    assert [i["where"] for i in d["items"]] == ["armor", "offhand", "hotbar", "inventory"]
+    sword = next(i for i in d["items"] if i["id"] == "minecraft:diamond_sword")
+    assert sword["item_part"] == ('minecraft:diamond_sword'
+                                  '[minecraft:enchantments='
+                                  '{"minecraft:sharpness":5,"minecraft:unbreaking":3}]')
+    assert sword["enchants"] == ["sharpness 5", "unbreaking 3"]
+    beef = next(i for i in d["items"] if i["id"] == "minecraft:cooked_beef")
+    assert beef["item_part"] == "minecraft:cooked_beef 32"
+
+
+def test_recovery_sources_and_upload(client, mc_data):
+    (mc_data / "world" / "playerdata" / f"{UUID_A}.dat_old").write_bytes(_inventory_dat())
+    src = client.get("/api/recovery/sources").json()["sources"]
+    assert any(s["player"] == "alice" and s["which"] == "previous" and s["size"] > 0
+               for s in src)
+    ups = client.post("/api/recovery/upload", content=_inventory_dat())
+    assert ups.status_code == 200
+    assert len(ups.json()["items"]) == 4
+    assert client.post("/api/recovery/upload", content=b"junk").status_code == 400
+    assert client.post("/api/recovery/read",
+                       json={"player": "nobody", "which": "current"}).status_code == 404
+
+
 def test_settings_roundtrip_and_validation(client, wp_dir):
     assert client.get("/api/settings").json() == {"card_stats": None}  # unset -> frontend defaults
     r = client.post("/api/settings", json={"card_stats": ["hours", "deaths", "xp"]})

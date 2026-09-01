@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 55 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 62 tests, no network, no MC server
 node --test                                   # frontend builders + stat/detail transforms: 46 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -132,10 +132,19 @@ template (set empty to disable avatar fetching).
   chown `/cb-data` (self-heal from older uid-10001 images), then drops to `dash` via
   setpriv. Local pytest runs as the file owner and can't catch this class of bug — check
   file *modes*, not just readability, when adding new file-reading features.
-- UI structure: seven hash-routed tabs — **Dashboard** (Global commands across the top +
+- **Gear recovery** (Recovery tab): `app/nbt.py` is a full NBT parser + SNBT writer —
+  wrapper types (`Byte`/`Short`/`Long`/`Float`/arrays) preserve tag widths so item
+  components round-trip verbatim into `give <player> <id>[components] <count>` strings
+  (validated against live Paper 26.2). Sources: each player's current `.dat`, their
+  `.dat_old`, or an uploaded backup `.dat` (raw-bytes POST, no multipart dep). Read-only
+  on world files; gives go through `/api/command`. NBT gotcha that cost a bug: in
+  `out[self.string()] = self.payload(tag)` Python evaluates the RIGHT side first —
+  always read the name into a local before the payload.
+- UI structure: eight hash-routed tabs — **Dashboard** (Global commands across the top +
   a full-body card per whitelisted/online player), **Server Info** (status/facts +
-  world panel), **Console**, **Whitelist**, **Waypoints**, **Settings** (card-stat
-  picker), **Logs** — plus the header's sky widget (status dot, in-game clock +
+  world panel), **Console**, **Whitelist**, **Waypoints**, **Recovery** (gear
+  restoration from saves/backups), **Settings** (card-stat picker), **Logs** — plus the
+  header's sky widget (status dot, in-game clock +
   weather-condition icon, day count). The card vs
   global split is data-driven: each command in `quick-commands.js` carries
   `scope: 'player'|'global'`, and player commands name their `playerField`, which cards

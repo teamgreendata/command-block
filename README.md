@@ -6,8 +6,9 @@ size, seed, MSPT, distances…), a card per player with their full-body skin ren
 and a configurable stat list (last seen, hours played, deaths, kills, nemesis,
 distance, diamonds, XP and a dozen more — pick which on the Settings tab), a
 per-player analytics page (click the name: deaths by cause, kills, blocks
-harvested, items used/crafted/worn out, movement — all as breakdowns), plus
-the player-targeted commands right on the card
+harvested, items used/crafted/worn out, movement — all as breakdowns), a gear
+recovery tab (read any playerdata save or backup .dat and re-give the items,
+enchantments included), plus the player-targeted commands right on the card
 (teleport, give, effect, gamemode, XP, message, summon, clear, kill, kick, ban),
 global commands with one-click presets (time, weather, game rules, difficulty),
 saved teleport waypoints (grab a player's live position, name it, teleport

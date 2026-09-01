@@ -126,7 +126,8 @@ main {
 }
 /* single-column tabs (dashboard panels are all full-width now) */
 #page-dashboard.active, #page-console.active, #page-whitelist.active,
-#page-waypoints.active, #page-settings.active, #page-logs.active { grid-template-columns: 1fr; }
+#page-waypoints.active, #page-recovery.active, #page-settings.active,
+#page-logs.active { grid-template-columns: 1fr; }
 @media (max-width: 750px) { .tab-page.active { grid-template-columns: 1fr; } }
 
 /* global commands: builder + broadcast side by side across the top */
@@ -312,6 +313,24 @@ select:focus { outline: none; border-color: #fff; }
 }
 .pc-stat-v { color: #fff; text-shadow: 2px 2px 0 #3f3f3f; }
 .pc-stat-v.warn { color: var(--red); }
+
+/* Gear recovery */
+.rec-controls { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
+.rec-controls select { max-width: 24rem; }
+.rec-upload { font-size: 0.8rem; }
+.rec-upload input { font-family: var(--pixel); font-size: 0.75rem; color: var(--ink); }
+#rec-items {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 0.3rem 1rem;
+  align-items: center;
+  margin-top: 0.8rem;
+}
+#rec-items .empty { grid-column: 1 / -1; }
+.rec-item { display: contents; }
+.rec-where { font-size: 0.7rem; color: var(--dim); }
+.rec-name { font-size: 0.85rem; color: var(--ink); overflow-wrap: anywhere; }
+.rec-detail { font-size: 0.75rem; color: #7a5b16; text-align: right; }
 
 /* Settings: the card-stats checklist */
 .settings-grid {
