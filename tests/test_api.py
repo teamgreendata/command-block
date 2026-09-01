@@ -40,6 +40,14 @@ def test_healthz(client):
     assert r.json() == {"ok": True}
 
 
+def test_static_files_force_revalidation(client, avatar_fetches):
+    # a stale cached app.js must never mismatch fresh index.html
+    for path in ("/", "/app.js", "/style.css"):
+        assert client.get(path).headers["cache-control"] == "no-cache", path
+    # the avatar proxy keeps its own explicit caching
+    assert "max-age" in client.get("/api/avatar/alice").headers["cache-control"]
+
+
 def test_command_strips_leading_slash(client, rcon_calls):
     r = client.post("/api/command", json={"command": "/whitelist reload"})
     assert r.status_code == 200

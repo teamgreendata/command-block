@@ -122,6 +122,17 @@ async def basic_auth(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def no_stale_cache(request: Request, call_next):
+    # The UI ships new tabs/features often; force revalidation (cheap 304s via
+    # ETags) so a stale cached app.js can never mismatch fresh index.html.
+    # Endpoints that set their own Cache-Control (avatars) keep it.
+    response = await call_next(request)
+    if request.method == "GET" and "cache-control" not in response.headers:
+        response.headers["cache-control"] = "no-cache"
+    return response
+
+
 @app.exception_handler(RconError)
 async def rcon_error_handler(request: Request, exc: RconError):
     return JSONResponse(status_code=502, content={"error": str(exc)})
