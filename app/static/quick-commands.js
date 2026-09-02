@@ -277,8 +277,9 @@ export const PRESETS = [
   { label: 'Night', command: 'time set night' },
   { label: 'Clear weather', command: 'weather clear' },
   { label: 'Kill all mobs', command: 'kill @e[type=!player]', confirm: 'Kill every non-player entity? (mobs, but also dropped items, armor stands…)' },
+  // deliberately no "keep inventory OFF" preset — turning it off is a
+  // considered act, done via the Game rule builder, not a one-click button
   { label: 'Keep inventory ON', command: 'gamerule keep_inventory true' },
-  { label: 'Keep inventory OFF', command: 'gamerule keep_inventory false' },
 ];
 
 export function findCommand(name) {
