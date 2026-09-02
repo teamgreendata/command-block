@@ -31,7 +31,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/python -m pytest                    # backend: 62 tests, no network, no MC server
-node --test                                   # frontend builders + stat/detail transforms: 46 tests (bare, not `node --test tests/`)
+node --test                                   # frontend builders + stat/detail/forge transforms: 50 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
 ```
@@ -140,9 +140,9 @@ template (set empty to disable avatar fetching).
   on world files; gives go through `/api/command`. NBT gotcha that cost a bug: in
   `out[self.string()] = self.payload(tag)` Python evaluates the RIGHT side first —
   always read the name into a local before the payload.
-- UI structure: eight hash-routed tabs — **Dashboard** (Global commands across the top +
+- UI structure: nine hash-routed tabs — **Dashboard** (Global commands across the top +
   a full-body card per whitelisted/online player), **Server Info** (status/facts +
-  world panel), **Console**, **Whitelist**, **Waypoints**, **Recovery** (gear
+  world panel), **Console**, **Whitelist**, **Waypoints**, **Forge** (enchanted-item builder), **Recovery** (gear
   restoration from saves/backups), **Settings** (card-stat picker), **Logs** — plus the
   header's sky widget (status dot, in-game clock +
   weather-condition icon, day count). The card vs

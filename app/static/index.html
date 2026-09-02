@@ -26,6 +26,7 @@
   <button type="button" class="tab" data-tab="console">Console</button>
   <button type="button" class="tab" data-tab="whitelist">Whitelist</button>
   <button type="button" class="tab" data-tab="waypoints">Waypoints</button>
+  <button type="button" class="tab" data-tab="forge">Forge</button>
   <button type="button" class="tab" data-tab="recovery">Recovery</button>
   <button type="button" class="tab" data-tab="settings">Settings</button>
   <button type="button" class="tab" data-tab="logs">Logs</button>
@@ -152,6 +153,24 @@
         <button id="wp-grab-btn" type="button">Grab</button>
       </div>
       <p class="quick-desc">Stand where the waypoint should be, grab the position, name it, add.</p>
+    </section>
+  </section>
+
+  <section class="tab-page" id="page-forge">
+    <section class="panel" id="forge-panel">
+      <h2>Item forge</h2>
+      <p class="quick-desc">Build enchanted gear: pick an item, tick the enchantments and levels,
+        give it. Any combination is allowed — the anvil rules don’t apply to admins.</p>
+      <div class="rec-controls">
+        <select id="forge-item"></select>
+        <label>count</label>
+        <input id="forge-count" inputmode="numeric" value="1">
+        <label>give to</label>
+        <select id="forge-target"></select>
+        <button id="forge-give" type="button">Give</button>
+      </div>
+      <div id="forge-enchants" class="forge-enchants"></div>
+      <pre id="forge-preview" class="forge-preview"></pre>
     </section>
   </section>
 

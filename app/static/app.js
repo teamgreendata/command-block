@@ -1,6 +1,7 @@
 import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick, buildWaypointTp } from './quick-commands.js';
 import { CARD_STATS, DEFAULT_CARD_STATS, fmtDuration } from './stats.js';
 import { topEntries, deathAnalysis, movementRows, damageRows, interactionRows, leftoverCustom } from './detail.js';
+import { FORGE_ITEMS, findForgeItem, forgeEnchants, buildForgeGive } from './forge.js';
 
 const $ = s => document.querySelector(s);
 const stripCodes = s => String(s).replace(/§./g, '');
@@ -72,7 +73,7 @@ function fillList(ul, items, emptyText) {
 
 // ---------------------------------------------------------------- tabs
 
-const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'recovery', 'settings', 'logs'];
+const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'forge', 'recovery', 'settings', 'logs'];
 
 function showTab(name) {
   // #player/<name> is a virtual page: the per-player analytics view
@@ -418,6 +419,8 @@ function updateGrabSelect(names) {
   fillPlayerSelect($('#wp-grab-player'), names);
   $('#wp-grab-btn').disabled = !names.length;
   fillPlayerSelect($('#rec-target'), names);
+  fillPlayerSelect($('#forge-target'), names);
+  updateForgePreview();
 }
 
 $('#wp-grab-btn').addEventListener('click', async () => {
@@ -430,6 +433,88 @@ $('#wp-grab-btn').addEventListener('click', async () => {
     flash(`Grabbed ${who}’s position — name it and add.`);
     $('#wp-name').focus();
   } catch (e) { flash(e.message, true); }
+});
+
+// ---------------------------------------------------------------- item forge
+
+function renderForgeItems() {
+  const sel = $('#forge-item');
+  let group = null;
+  let og = null;
+  for (const item of FORGE_ITEMS) {
+    if (item.group !== group) {
+      group = item.group;
+      og = document.createElement('optgroup');
+      og.label = group;
+      sel.appendChild(og);
+    }
+    const o = document.createElement('option');
+    o.value = item.id;
+    o.textContent = item.label;
+    og.appendChild(o);
+  }
+}
+
+function renderForgeEnchants() {
+  const wrap = $('#forge-enchants');
+  wrap.replaceChildren();
+  for (const e of forgeEnchants($('#forge-item').value)) {
+    const row = el('label', 'forge-ench');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.value = e.id;
+    box.addEventListener('change', updateForgePreview);
+    row.appendChild(box);
+    row.appendChild(document.createTextNode(` ${e.label} `));
+    const lvl = document.createElement('select');
+    lvl.dataset.levelFor = e.id;
+    for (let i = 1; i <= e.max; i++) {
+      const o = document.createElement('option');
+      o.value = o.textContent = String(i);
+      lvl.appendChild(o);
+    }
+    lvl.value = String(e.max); // maxed by default — it's what you want anyway
+    lvl.hidden = e.max === 1;
+    lvl.addEventListener('change', () => {
+      box.checked = true; // touching a level implies wanting the enchant
+      updateForgePreview();
+    });
+    row.appendChild(lvl);
+    wrap.appendChild(row);
+  }
+  updateForgePreview();
+}
+
+function forgePicks() {
+  const wrap = $('#forge-enchants');
+  return [...wrap.querySelectorAll('input:checked')].map(box => ({
+    id: box.value,
+    level: parseInt(wrap.querySelector(`[data-level-for="${box.value}"]`).value, 10),
+  }));
+}
+
+function forgeCommand() {
+  const target = $('#forge-target').value || '<player>';
+  const count = parseInt($('#forge-count').value, 10) || 1;
+  return buildForgeGive(target, $('#forge-item').value, forgePicks(), count);
+}
+
+function updateForgePreview() {
+  if (!$('#forge-item').value) return;
+  $('#forge-preview').textContent = forgeCommand();
+}
+
+renderForgeItems();
+renderForgeEnchants();
+$('#forge-item').addEventListener('change', renderForgeEnchants);
+$('#forge-count').addEventListener('input', updateForgePreview);
+$('#forge-target').addEventListener('change', updateForgePreview);
+
+$('#forge-give').addEventListener('click', () => {
+  if (!$('#forge-target').value) { flash('Nobody online to give to.', true); return; }
+  sendRaw(forgeCommand());
+  const item = findForgeItem($('#forge-item').value);
+  flash(`Sent ${item.label} — response is in the Console tab.`);
 });
 
 // ---------------------------------------------------------------- gear recovery

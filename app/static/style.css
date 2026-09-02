@@ -126,8 +126,8 @@ main {
 }
 /* single-column tabs (dashboard panels are all full-width now) */
 #page-dashboard.active, #page-console.active, #page-whitelist.active,
-#page-waypoints.active, #page-recovery.active, #page-settings.active,
-#page-logs.active { grid-template-columns: 1fr; }
+#page-waypoints.active, #page-forge.active, #page-recovery.active,
+#page-settings.active, #page-logs.active { grid-template-columns: 1fr; }
 @media (max-width: 750px) { .tab-page.active { grid-template-columns: 1fr; } }
 
 /* global commands: builder + broadcast side by side across the top */
@@ -313,6 +313,35 @@ select:focus { outline: none; border-color: #fff; }
 }
 .pc-stat-v { color: #fff; text-shadow: 2px 2px 0 #3f3f3f; }
 .pc-stat-v.warn { color: var(--red); }
+
+/* Item forge */
+.forge-enchants {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.35rem 1rem;
+  margin: 0.6rem 0;
+}
+.forge-ench {
+  color: var(--ink);
+  font-size: 0.85rem;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  user-select: none;
+}
+.forge-ench select { padding: 0.1rem 0.3rem; font-size: 0.78rem; margin-left: auto; }
+#forge-count { flex: 0 0 4rem; }
+#forge-item { max-width: 18rem; }
+.forge-preview {
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.6rem;
+  background: #000;
+  color: var(--gold);
+  border: 2px solid #555;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* Gear recovery */
 .rec-controls { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
