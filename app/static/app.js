@@ -221,7 +221,7 @@ async function refreshServerInfo() {
     }
   } catch { /* keep the last values */ }
   clearTimeout(infoTimer);
-  infoTimer = setTimeout(refreshServerInfo, 30000);
+  infoTimer = setTimeout(refreshServerInfo, 60000); // rarely-changing facts — go easy on RCON
 }
 
 // ---------------------------------------------------------------- player data
@@ -1224,7 +1224,7 @@ for (const p of PRESETS) {
 
 async function refreshLogs() {
   try {
-    const l = await api('/api/logs?lines=100');
+    const l = await api(`/api/logs?lines=100${$('#logs-raw').checked ? '&raw=1' : ''}`);
     const out = $('#logs-out');
     out.textContent = l.error ? l.error : l.lines.join('\n');
     out.scrollTop = out.scrollHeight;
@@ -1232,6 +1232,7 @@ async function refreshLogs() {
 }
 
 $('#logs-refresh').addEventListener('click', refreshLogs);
+$('#logs-raw').addEventListener('change', refreshLogs);
 $('#logs-auto').addEventListener('change', e => {
   clearInterval(logsTimer);
   if (e.target.checked) logsTimer = setInterval(refreshLogs, 5000);

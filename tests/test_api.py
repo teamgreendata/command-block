@@ -127,6 +127,21 @@ def test_logs_reads_mounted_file(client, monkeypatch, tmp_path):
     assert r.json() == {"lines": ["two", "three"]}
 
 
+def test_logs_hide_rcon_noise_unless_raw(client, monkeypatch, tmp_path):
+    log = tmp_path / "latest.log"
+    log.write_text(
+        "[10:00:01] [Server thread/INFO]: RobGreen joined the game\n"
+        "[10:00:02] [RCON Listener #1/INFO]: Thread RCON Client /172.18.0.3 started\n"
+        "[10:00:02] [RCON Client /172.18.0.3 #6/INFO]: Thread RCON Client /172.18.0.3 shutting down\n"
+        "[10:00:09] [Server thread/INFO]: <RobGreen> found diamonds!\n")
+    monkeypatch.setenv("LOG_FILE", str(log))
+    assert client.get("/api/logs?lines=10").json()["lines"] == [
+        "[10:00:01] [Server thread/INFO]: RobGreen joined the game",
+        "[10:00:09] [Server thread/INFO]: <RobGreen> found diamonds!",
+    ]
+    assert len(client.get("/api/logs?lines=10&raw=1").json()["lines"]) == 4
+
+
 def test_logs_missing_file_is_graceful(client, monkeypatch, tmp_path):
     monkeypatch.setenv("LOG_FILE", str(tmp_path / "gone.log"))
     r = client.get("/api/logs")
@@ -241,6 +256,7 @@ def world_files(tmp_path, monkeypatch):
     """A modern-layout world with weather, clocks, session.lock, properties."""
     monkeypatch.setenv("MC_DATA", str(tmp_path))
     main._world_size_cache = None
+    main._seed_cache = None
     world = tmp_path / "world"
     (world / "players" / "data").mkdir(parents=True)
     ow_data = world / "dimensions" / "minecraft" / "overworld" / "data" / "minecraft"

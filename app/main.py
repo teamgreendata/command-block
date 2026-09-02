@@ -91,10 +91,20 @@ def parse_tps(raw: str) -> dict:
     return {"raw": cleaned}
 
 
-def tail_lines(path: Path, count: int) -> list[str]:
+# The dashboard's own per-request RCON polling writes two of these per
+# connection ("… started" / "… shutting down") — dozens a minute. Hide them by
+# default so the log tail shows actual server events.
+_RCON_NOISE = "Thread RCON Client"
+
+
+def tail_lines(path: Path, count: int, include_rcon: bool = False) -> list[str]:
     count = max(1, min(count, MAX_LOG_LINES))
+    scan = count if include_rcon else min(count * 10, 2000)
     with path.open(errors="replace") as f:
-        return [line.rstrip("\n") for line in deque(f, maxlen=count)]
+        lines = [line.rstrip("\n") for line in deque(f, maxlen=scan)]
+    if not include_rcon:
+        lines = [line for line in lines if _RCON_NOISE not in line]
+    return lines[-count:]
 
 
 # ---------------------------------------------------------------- auth & errors
@@ -283,10 +293,10 @@ async def restart():
 
 
 @app.get("/api/logs")
-async def logs(lines: int = Query(100, ge=1)):
+async def logs(lines: int = Query(100, ge=1), raw: int = 0):
     path = _log_file()
     try:
-        return {"lines": tail_lines(path, lines)}
+        return {"lines": tail_lines(path, lines, include_rcon=bool(raw))}
     except OSError:
         return {"lines": [], "error": f"Log file not readable at {path}."}
 
@@ -710,6 +720,7 @@ def _server_props(data: Path) -> dict:
 
 
 _world_size_cache: tuple[float, int] | None = None
+_seed_cache: str | None = None
 
 
 def _world_size(data: Path) -> int | None:
@@ -745,8 +756,12 @@ async def serverinfo():
 
     if (r := await query("difficulty")) and (m := re.search(r"difficulty is (\w+)", r)):
         out["difficulty"] = m.group(1)
-    if (r := await query("seed")) and (m := re.search(r"\[(-?\d+)\]", r)):
-        out["seed"] = m.group(1)
+    global _seed_cache  # the seed never changes — one RCON query per process
+    if _seed_cache is None:
+        if (r := await query("seed")) and (m := re.search(r"\[(-?\d+)\]", r)):
+            _seed_cache = m.group(1)
+    if _seed_cache is not None:
+        out["seed"] = _seed_cache
     if r := await query("mspt"):
         mspt = parse_mspt(r)
         if mspt:
