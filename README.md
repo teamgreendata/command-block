@@ -13,7 +13,7 @@ enchantments included), an item forge (build enchanted gear from dropdowns), plu
 global commands with one-click presets (time, weather, game rules, difficulty),
 saved teleport waypoints (grab a player's live position, name it, teleport
 anyone there later — across dimensions), a browser RCON console, whitelist
-management, log tail, and a graceful restart button, across five tabs. FastAPI + vanilla JS, one container, deliberately
+management, log tail, and a graceful restart button, across nine tabs. FastAPI + vanilla JS, one container, deliberately
 **no Docker socket**: the entire admin surface is RCON plus a read-only log mount.
 
 Named for the in-game block whose entire job is executing console commands — and
