@@ -791,6 +791,37 @@ async def serverinfo():
     return out
 
 
+# ---------------------------------------------------------------- item icons
+
+# Second (and last) class of backend-outbound call, same treatment as avatars:
+# proxied + cached item sprites for the Biomes catalog. ITEM_ICON_URL= (empty)
+# disables fetching; the frontend hides missing images.
+ITEM_ICON_DEFAULT_URL = "https://mc.nerothe.com/img/1.21/minecraft_{id}.png"
+_ITEM_ID_RE = re.compile(r"^[a-z0-9_]{1,64}$")
+
+
+@app.get("/api/itemicon/{item_id}")
+async def itemicon(item_id: str):
+    if not _ITEM_ID_RE.match(item_id):
+        return _bad_request("Invalid item id.")
+    template = _env("ITEM_ICON_URL", ITEM_ICON_DEFAULT_URL)
+    if not template:
+        return _avatar_reply(None)
+    key = f"icon:{item_id}"
+    cached = _avatar_cache.get(key)
+    if cached:
+        data, fetched_at = cached
+        ttl = AVATAR_TTL if data is not None else AVATAR_NEG_TTL
+        if time.monotonic() - fetched_at < ttl:
+            return _avatar_reply(data)
+    try:
+        data = await asyncio.to_thread(fetch_avatar, template.format(id=item_id))
+    except Exception:
+        data = None
+    _avatar_cache[key] = (data, time.monotonic())
+    return _avatar_reply(data)
+
+
 # ---------------------------------------------------------------- gear recovery
 
 # Reads an inventory out of a playerdata .dat (the live one, the previous

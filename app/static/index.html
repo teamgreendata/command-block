@@ -27,6 +27,7 @@
   <button type="button" class="tab" data-tab="whitelist">Whitelist</button>
   <button type="button" class="tab" data-tab="waypoints">Waypoints</button>
   <button type="button" class="tab" data-tab="forge">Forge</button>
+  <button type="button" class="tab" data-tab="biomes">Biomes</button>
   <button type="button" class="tab" data-tab="recovery">Recovery</button>
   <button type="button" class="tab" data-tab="settings">Settings</button>
   <button type="button" class="tab" data-tab="logs">Logs</button>
@@ -171,6 +172,22 @@
       </div>
       <div id="forge-enchants" class="forge-enchants"></div>
       <pre id="forge-preview" class="forge-preview"></pre>
+    </section>
+  </section>
+
+  <section class="tab-page" id="page-biomes">
+    <section class="panel" id="biomes-panel">
+      <h2>Biome catalog</h2>
+      <p class="quick-desc">Items the world hands out — foraged, mined or dropped by mobs —
+        grouped by where they come from. Give any of them to an online player.</p>
+      <div class="rec-controls">
+        <input id="bio-search" placeholder="filter items…" spellcheck="false">
+        <label>count</label>
+        <input id="bio-count" inputmode="numeric" value="1">
+        <label>give to</label>
+        <select id="bio-target"></select>
+      </div>
+      <div id="bio-groups"></div>
     </section>
   </section>
 

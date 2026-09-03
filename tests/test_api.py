@@ -233,6 +233,18 @@ def test_avatar_disabled_via_empty_env(client, monkeypatch, avatar_fetches):
     assert avatar_fetches == []
 
 
+def test_itemicon_proxies_caches_and_validates(client, avatar_fetches, monkeypatch):
+    monkeypatch.delenv("ITEM_ICON_URL", raising=False)
+    r = client.get("/api/itemicon/slime_ball")
+    assert r.status_code == 200
+    assert r.content == b"png-bytes"
+    client.get("/api/itemicon/slime_ball")  # cache hit
+    assert avatar_fetches == ["https://mc.nerothe.com/img/1.21/minecraft_slime_ball.png"]
+    assert client.get("/api/itemicon/Bad-Id").status_code == 400
+    monkeypatch.setenv("ITEM_ICON_URL", "")
+    assert client.get("/api/itemicon/diamond").status_code == 404  # kill switch
+
+
 UUID_A = "11111111-2222-3333-4444-555555555555"
 UUID_B = "66666666-7777-8888-9999-000000000000"
 

@@ -30,8 +30,8 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 64 tests, no network, no MC server
-node --test                                   # frontend builders + stat/detail/forge transforms: 50 tests (bare, not `node --test tests/`)
+.venv/bin/python -m pytest                    # backend: 65 tests, no network, no MC server
+node --test                                   # frontend builders + stat/detail/forge/biome data: 53 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
 ```
@@ -132,6 +132,11 @@ template (set empty to disable avatar fetching).
   chown `/cb-data` (self-heal from older uid-10001 images), then drops to `dash` via
   setpriv. Local pytest runs as the file owner and can't catch this class of bug — check
   file *modes*, not just readability, when adding new file-reading features.
+- **Biomes catalog**: `app/static/biomes.js` is curated data — every id was swept
+  against a live Paper 26.2 server (`give @p <id>` must parse; catches this
+  generation's renames like short_grass/turtle_scute). Re-run the sweep whenever items
+  are added. Sprites proxy through `GET /api/itemicon/{id}` (mc.nerothe.com, cached,
+  `ITEM_ICON_URL=` empty disables) — the second and LAST allowed outbound call class.
 - **Gear recovery** (Recovery tab): `app/nbt.py` is a full NBT parser + SNBT writer —
   wrapper types (`Byte`/`Short`/`Long`/`Float`/arrays) preserve tag widths so item
   components round-trip verbatim into `give <player> <id>[components] <count>` strings
@@ -140,9 +145,9 @@ template (set empty to disable avatar fetching).
   on world files; gives go through `/api/command`. NBT gotcha that cost a bug: in
   `out[self.string()] = self.payload(tag)` Python evaluates the RIGHT side first —
   always read the name into a local before the payload.
-- UI structure: nine hash-routed tabs — **Dashboard** (Global commands across the top +
+- UI structure: ten hash-routed tabs — **Dashboard** (Global commands across the top +
   a full-body card per whitelisted/online player), **Server Info** (status/facts +
-  world panel), **Console**, **Whitelist**, **Waypoints**, **Forge** (enchanted-item builder), **Recovery** (gear
+  world panel), **Console**, **Whitelist**, **Waypoints**, **Forge** (enchanted-item builder), **Biomes** (natural-item catalog with sprites + give), **Recovery** (gear
   restoration from saves/backups), **Settings** (card-stat picker), **Logs** — plus the
   header's sky widget (status dot, in-game clock +
   weather-condition icon, day count). The card vs

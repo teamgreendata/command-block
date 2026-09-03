@@ -2,6 +2,7 @@ import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick, buildWay
 import { CARD_STATS, DEFAULT_CARD_STATS, fmtDuration } from './stats.js';
 import { topEntries, deathAnalysis, movementRows, damageRows, interactionRows, leftoverCustom } from './detail.js';
 import { FORGE_ITEMS, findForgeItem, forgeEnchants, buildForgeGive } from './forge.js';
+import { BIOME_ITEMS, buildBiomeGive } from './biomes.js';
 
 const $ = s => document.querySelector(s);
 const stripCodes = s => String(s).replace(/§./g, '');
@@ -73,7 +74,7 @@ function fillList(ul, items, emptyText) {
 
 // ---------------------------------------------------------------- tabs
 
-const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'forge', 'recovery', 'settings', 'logs'];
+const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'forge', 'biomes', 'recovery', 'settings', 'logs'];
 
 function showTab(name) {
   // #player/<name> is a virtual page: the per-player analytics view
@@ -420,6 +421,7 @@ function updateGrabSelect(names) {
   $('#wp-grab-btn').disabled = !names.length;
   fillPlayerSelect($('#rec-target'), names);
   fillPlayerSelect($('#forge-target'), names);
+  fillPlayerSelect($('#bio-target'), names);
   updateForgePreview();
 }
 
@@ -516,6 +518,53 @@ $('#forge-give').addEventListener('click', () => {
   const item = findForgeItem($('#forge-item').value);
   flash(`Sent ${item.label} — response is in the Console tab.`);
 });
+
+// ---------------------------------------------------------------- biome catalog
+
+function biomeChip(item) {
+  const chip = el('div', 'bio-chip');
+  const img = el('img', 'bio-icon');
+  img.alt = '';
+  img.loading = 'lazy';
+  img.src = `/api/itemicon/${item.id.replace('minecraft:', '')}`;
+  img.addEventListener('error', () => { img.hidden = true; }, { once: true });
+  chip.appendChild(img);
+  const text = el('div', 'bio-text');
+  text.appendChild(el('div', 'bio-label', item.label));
+  if (item.note) text.appendChild(el('div', 'bio-note', item.note));
+  chip.appendChild(text);
+  const btn = el('button', 'small', 'Give');
+  btn.type = 'button';
+  btn.addEventListener('click', () => {
+    const target = $('#bio-target').value;
+    if (!target) { flash('Nobody online to give to.', true); return; }
+    sendRaw(buildBiomeGive(target, item.id, parseInt($('#bio-count').value, 10) || 1));
+    flash(`Sent ${item.label} — response is in the Console tab.`);
+  });
+  chip.appendChild(btn);
+  return chip;
+}
+
+function renderBiomes() {
+  const q = $('#bio-search').value.trim().toLowerCase();
+  const wrap = $('#bio-groups');
+  wrap.replaceChildren();
+  for (const group of BIOME_ITEMS) {
+    const items = group.items.filter(item => !q
+      || item.label.toLowerCase().includes(q)
+      || (item.note || '').toLowerCase().includes(q)
+      || group.biome.toLowerCase().includes(q));
+    if (!items.length) continue;
+    wrap.appendChild(el('h3', 'bio-biome', group.biome));
+    const grid = el('div', 'bio-grid');
+    for (const item of items) grid.appendChild(biomeChip(item));
+    wrap.appendChild(grid);
+  }
+  if (!wrap.children.length) wrap.appendChild(el('p', 'empty', 'no items match'));
+}
+
+renderBiomes();
+$('#bio-search').addEventListener('input', renderBiomes);
 
 // ---------------------------------------------------------------- gear recovery
 

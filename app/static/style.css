@@ -126,8 +126,8 @@ main {
 }
 /* single-column tabs (dashboard panels are all full-width now) */
 #page-dashboard.active, #page-console.active, #page-whitelist.active,
-#page-waypoints.active, #page-forge.active, #page-recovery.active,
-#page-settings.active, #page-logs.active { grid-template-columns: 1fr; }
+#page-waypoints.active, #page-forge.active, #page-biomes.active,
+#page-recovery.active, #page-settings.active, #page-logs.active { grid-template-columns: 1fr; }
 @media (max-width: 750px) { .tab-page.active { grid-template-columns: 1fr; } }
 
 /* global commands: builder + broadcast side by side across the top */
@@ -342,6 +342,28 @@ select:focus { outline: none; border-color: #fff; }
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Biome catalog */
+h3.bio-biome { margin: 1rem 0 0.25rem; font-size: 0.9rem; color: var(--ink); }
+.bio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.4rem 0.8rem;
+}
+.bio-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  background: #8b8b8b;
+  box-shadow: inset 2px 2px 0 #373737, inset -2px -2px 0 #ffffff;
+  padding: 0.35rem 0.55rem;
+}
+.bio-icon { width: 24px; height: 24px; image-rendering: pixelated; flex: none; }
+.bio-text { flex: 1; min-width: 0; }
+.bio-label { font-size: 0.8rem; color: #fff; text-shadow: 2px 2px 0 #3f3f3f; overflow-wrap: anywhere; }
+.bio-note { font-size: 0.68rem; color: #2f2f2f; }
+#bio-search { flex: 0 1 16rem; }
+#bio-count { flex: 0 0 4rem; }
 
 /* Gear recovery */
 .rec-controls { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
