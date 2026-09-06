@@ -1252,12 +1252,16 @@ function renderGlobalFields(cmd) {
 
 quickSelect.addEventListener('change', () => renderGlobalFields(findCommand(quickSelect.value)));
 
-$('#quick-form').addEventListener('submit', e => {
+$('#quick-form').addEventListener('submit', async e => {
   e.preventDefault();
   const cmd = findCommand(quickSelect.value);
   const built = buildQuick(cmd, collectValues($('#quick-fields')));
   if (built.error) { flash(built.error, true); return; }
-  sendRaw(built.command, cmd.confirm ? cmd.confirm(built.args) : null);
+  if (cmd.buildMany) {
+    for (const command of cmd.buildMany(built.args)) await sendRaw(command);
+  } else {
+    sendRaw(built.command, cmd.confirm ? cmd.confirm(built.args) : null);
+  }
 });
 
 for (const p of PRESETS) {
@@ -1265,7 +1269,13 @@ for (const p of PRESETS) {
   b.type = 'button';
   b.className = 'small';
   b.textContent = p.label;
-  b.addEventListener('click', () => sendRaw(p.command, p.confirm));
+  b.addEventListener('click', async () => {
+    if (p.commands) {
+      for (const command of p.commands) await sendRaw(command);
+    } else {
+      sendRaw(p.command, p.confirm);
+    }
+  });
   $('#preset-row').appendChild(b);
 }
 

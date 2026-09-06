@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick, buildWaypointTp } from '../app/static/quick-commands.js';
+import { QUICK_COMMANDS, PRESETS, SUGGESTIONS, findCommand, buildQuick, buildWaypointTp, gameruleCommands } from '../app/static/quick-commands.js';
 
 const cases = [
   ['gamemode', { mode: 'creative', player: 'alice' }, 'gamemode creative alice'],
@@ -105,6 +105,22 @@ test('scopes split 9 player / 4 global, with valid card wiring', () => {
 });
 
 test('presets are well-formed and kill-all is confirm-gated', () => {
-  for (const p of PRESETS) assert.ok(p.label && p.command, p.label);
+  for (const p of PRESETS) assert.ok(p.label && (p.command || p.commands), p.label);
   assert.ok(PRESETS.find(p => p.command === 'kill @e[type=!player]').confirm);
+});
+
+test('gamerules cover every dimension (rules are per-dimension now)', () => {
+  assert.deepEqual(gameruleCommands({ rule: 'keep_inventory', value: 'true', dim: '' }), [
+    'gamerule keep_inventory true',
+    'execute in minecraft:the_nether run gamerule keep_inventory true',
+    'execute in minecraft:the_end run gamerule keep_inventory true',
+  ]);
+  assert.deepEqual(gameruleCommands({ rule: 'pvp', value: 'false', dim: 'nether' }),
+    ['execute in minecraft:the_nether run gamerule pvp false']);
+  assert.deepEqual(gameruleCommands({ rule: 'pvp', value: '', dim: 'overworld' }),
+    ['gamerule pvp']); // blank value queries
+  // the keep-inventory preset must hit all three dimensions
+  const preset = PRESETS.find(p => p.label === 'Keep inventory ON');
+  assert.deepEqual(preset.commands,
+    gameruleCommands({ rule: 'keep_inventory', value: 'true', dim: 'all' }));
 });

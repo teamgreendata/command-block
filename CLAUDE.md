@@ -163,6 +163,11 @@ template (set empty to disable avatar fetching).
 - **RCON has no executor** (no position, no "self") — that's why the quick panel makes
   clear/kill/gamemode targets required and summon goes through
   `execute at <player> run summon … ~ ~ ~` or explicit coords.
+- ⚠️ **Game rules are PER-DIMENSION in this generation** (verified live): plain
+  `gamerule` over RCON only touches the overworld; nether/End need
+  `execute in minecraft:the_nether run gamerule …`. The Keep-inventory-ON preset and the
+  gamerule builder's "all" dimension option send all three commands (`gameruleCommands`
+  in quick-commands.js; specs may declare `buildMany` for multi-command sends).
 - **This MC generation renamed all gamerules to snake_case** (doDaylightCycle →
   `advance_time`, doMobSpawning → `spawn_mobs`, keepInventory → `keep_inventory`…).
   The full registry lives in the server jar's `GameRules.class`; the curated list in

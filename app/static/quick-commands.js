@@ -92,6 +92,22 @@ export const SUGGESTIONS = {
   ],
 };
 
+// Game rules are PER-DIMENSION in this MC generation (verified live: setting
+// keep_inventory over RCON only touched the overworld; the nether kept its
+// own value). Plain `gamerule` acts on the overworld; other dimensions need
+// `execute in <dim> run gamerule …`.
+const DIM_IDS = { nether: 'minecraft:the_nether', end: 'minecraft:the_end' };
+
+export function gameruleCommands(a) {
+  const base = `gamerule ${a.rule}${a.value ? ` ${a.value}` : ''}`;
+  const dim = a.dim || 'all';
+  if (dim === 'overworld') return [base];
+  if (DIM_IDS[dim]) return [`execute in ${DIM_IDS[dim]} run ${base}`];
+  return [base,
+    `execute in ${DIM_IDS.nether} run ${base}`,
+    `execute in ${DIM_IDS.end} run ${base}`];
+}
+
 // Field types: select (fixed options) · player (online-players datalist +
 // selectors) · choice (friendly dropdown into SUGGESTIONS) · text · number.
 //
@@ -165,12 +181,14 @@ export const QUICK_COMMANDS = [
     name: 'gamerule',
     label: 'Game rule',
     scope: 'global',
-    desc: 'Set a game rule (keep_inventory true = keep items on death; advance_time false = freeze time; mob_griefing false = no creeper damage). Blank value queries it.',
+    desc: 'Set a game rule (keep_inventory true = keep items on death). Blank value queries it. ⚠ Rules are PER-DIMENSION in this MC generation — "all" covers overworld, nether and End.',
     fields: [
       { key: 'rule', label: 'rule', type: 'choice', choices: 'gamerules', required: true, placeholder: 'keep_inventory' },
       { key: 'value', label: 'value (blank = check current)', type: 'choice', choices: 'booleans', placeholder: 'number, e.g. 3' },
+      { key: 'dim', label: 'dimension', type: 'select', options: ['all', 'overworld', 'nether', 'end'] },
     ],
-    build: a => `gamerule ${a.rule}${a.value ? ` ${a.value}` : ''}`,
+    build: a => gameruleCommands(a)[0],
+    buildMany: gameruleCommands,
   },
   {
     name: 'difficulty',
@@ -278,8 +296,13 @@ export const PRESETS = [
   { label: 'Clear weather', command: 'weather clear' },
   { label: 'Kill all mobs', command: 'kill @e[type=!player]', confirm: 'Kill every non-player entity? (mobs, but also dropped items, armor stands…)' },
   // deliberately no "keep inventory OFF" preset — turning it off is a
-  // considered act, done via the Game rule builder, not a one-click button
-  { label: 'Keep inventory ON', command: 'gamerule keep_inventory true' },
+  // considered act, done via the Game rule builder, not a one-click button.
+  // ON covers every dimension (rules are per-dimension in this generation).
+  { label: 'Keep inventory ON', commands: [
+    'gamerule keep_inventory true',
+    'execute in minecraft:the_nether run gamerule keep_inventory true',
+    'execute in minecraft:the_end run gamerule keep_inventory true',
+  ] },
 ];
 
 export function findCommand(name) {
