@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 65 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 66 tests, no network, no MC server
 node --test                                   # frontend builders + stat/detail/forge/biome data: 53 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -141,7 +141,9 @@ template (set empty to disable avatar fetching).
   wrapper types (`Byte`/`Short`/`Long`/`Float`/arrays) preserve tag widths so item
   components round-trip verbatim into `give <player> <id>[components] <count>` strings
   (validated against live Paper 26.2). Sources: each player's current `.dat`, their
-  `.dat_old`, or an uploaded backup `.dat` (raw-bytes POST, no multipart dep). Read-only
+  `.dat_old`, or an uploaded backup `.dat` (raw-bytes POST, no multipart dep). ⚠️ This
+  generation moved player armor/offhand OUT of Inventory slots 100-103/-106 into an
+  `equipment` compound (head/chest/legs/feet/offhand) — both formats are read. Read-only
   on world files; gives go through `/api/command`. NBT gotcha that cost a bug: in
   `out[self.string()] = self.payload(tag)` Python evaluates the RIGHT side first —
   always read the name into a local before the payload.

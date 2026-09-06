@@ -528,6 +528,49 @@ def test_recovery_read_builds_give_parts(client, mc_data):
     assert beef["item_part"] == "minecraft:cooked_beef 32"
 
 
+def _modern_inventory_dat() -> bytes:
+    """Playerdata in this generation's format: armor/offhand live in an
+    `equipment` compound, not Inventory slots 100-103/-106."""
+    from tests.test_nbt import named, root, t_byte, t_compound, t_int, t_list, t_string
+
+    def stack(item_id, count, *components):
+        children = [named(8, "id", t_string(item_id)), named(3, "count", t_int(count))]
+        if components:
+            children.append(named(10, "components", t_compound(*components)))
+        return t_compound(*children)
+
+    def inv_item(slot, item_id, count):
+        return t_compound(named(1, "Slot", t_byte(slot)),
+                          named(8, "id", t_string(item_id)),
+                          named(3, "count", t_int(count)))
+
+    return root(
+        named(9, "Inventory", t_list(10, inv_item(0, "minecraft:diamond_sword", 1))),
+        named(10, "equipment", t_compound(
+            named(10, "head", stack("minecraft:netherite_helmet", 1,
+                                    named(10, "minecraft:enchantments", t_compound(
+                                        named(3, "minecraft:protection", t_int(4)))))),
+            named(10, "chest", stack("minecraft:netherite_chestplate", 1)),
+            named(10, "legs", stack("minecraft:netherite_leggings", 1)),
+            named(10, "feet", stack("minecraft:netherite_boots", 1)),
+            named(10, "offhand", stack("minecraft:shield", 1)),
+        )),
+    )
+
+
+def test_recovery_reads_modern_equipment_compound(client, mc_data):
+    (mc_data / "world" / "playerdata" / f"{UUID_A}.dat_old").write_bytes(_modern_inventory_dat())
+    d = client.post("/api/recovery/read",
+                    json={"player": "alice", "which": "previous"}).json()
+    assert [i["where"] for i in d["items"]] == ["armor"] * 4 + ["offhand", "hotbar"]
+    ids = [i["id"] for i in d["items"]]
+    assert "minecraft:netherite_helmet" in ids and "minecraft:shield" in ids
+    helmet = next(i for i in d["items"] if i["id"] == "minecraft:netherite_helmet")
+    assert helmet["enchants"] == ["protection 4"]
+    assert helmet["item_part"] == ('minecraft:netherite_helmet'
+                                   '[minecraft:enchantments={"minecraft:protection":4}]')
+
+
 def test_recovery_sources_and_upload(client, mc_data):
     (mc_data / "world" / "playerdata" / f"{UUID_A}.dat_old").write_bytes(_inventory_dat())
     src = client.get("/api/recovery/sources").json()["sources"]

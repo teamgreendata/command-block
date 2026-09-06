@@ -830,12 +830,24 @@ async def itemicon(item_id: str):
 # Strictly read-only on world files; the actual gives go through /api/command.
 
 
+# Modern playerdata (this generation) stores armor + offhand in an `equipment`
+# compound; classic saves keep them in Inventory slots 100-103 / -106. Read
+# both. mainhand is skipped: for players it duplicates a hotbar Inventory slot.
+_EQUIPMENT_SLOTS = {"feet": 100, "legs": 101, "chest": 102, "head": 103,
+                    "body": 104, "saddle": 105, "offhand": -106}
+
+
 def _inventory_items(root: dict) -> list[dict]:
+    entries = [(int(item.get("Slot", 0)), item) for item in root.get("Inventory", [])]
+    equipment = root.get("equipment", {})
+    if isinstance(equipment, dict):
+        for key, item in equipment.items():
+            if key != "mainhand" and isinstance(item, dict):
+                entries.append((_EQUIPMENT_SLOTS.get(key, 105), item))
     items = []
-    for item in root.get("Inventory", []):
+    for slot, item in entries:
         if not isinstance(item, dict) or "id" not in item:
             continue
-        slot = int(item.get("Slot", 0))
         comps = item.get("components", {})
         item_part = str(item["id"])
         if comps:
@@ -848,7 +860,7 @@ def _inventory_items(root: dict) -> list[dict]:
             ench = ench["levels"]  # older component layout
         enchants = ([f"{k.split(':')[-1].replace('_', ' ')} {int(v)}" for k, v in ench.items()]
                     if isinstance(ench, dict) else [])
-        where = ("armor" if 100 <= slot <= 103 else
+        where = ("armor" if 100 <= slot <= 105 else
                  "offhand" if slot == -106 else
                  "hotbar" if 0 <= slot <= 8 else "inventory")
         items.append({"slot": slot, "where": where, "id": item["id"], "count": count,
