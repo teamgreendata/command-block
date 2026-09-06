@@ -157,6 +157,14 @@ template (set empty to disable avatar fetching).
   `scope: 'player'|'global'`, and player commands name their `playerField`, which cards
   auto-fill with the card's player and hide (`cardHide` drops extra fields, e.g. summon's
   coords). Add a new command there and the right UI renders it automatically.
+- **Mobile is a supported first-class client** (the user drives this from phone/tablet).
+  Hard-won layout rules: `.panel` carries `min-width: 0` — grid items otherwise refuse to
+  shrink below content width and silently widen the page (`flex: 1`'s `0%` basis does NOT
+  suppress intrinsic contribution in Chrome); any new grid wrapper needs the same on its
+  children. Inputs/selects get 16px font on ≤750px via selectors matching the base rules'
+  specificity (iOS zooms into anything smaller). When testing: Playwright's `is_mobile`
+  emulation zooms out and HIDES overflow — measure `scrollWidth` against the device width
+  in a plain viewport (see the scratchpad sweep pattern: every tab must fit 390px).
 - The UI is Minecraft-GUI themed by design (`style.css`): inventory-gray beveled panels,
   stone buttons, black edit boxes, MC chat colors (`#55FF55`/`#FF5555`/`#FFAA00`) — stay
   in that visual language for new UI.

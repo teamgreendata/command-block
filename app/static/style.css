@@ -92,6 +92,7 @@ header h1::before {
 /* Creative-inventory-style tab bar: the active tab comes forward in panel gray */
 #tabs {
   display: flex;
+  flex-wrap: wrap; /* ten tabs must never force sideways scroll on a phone */
   gap: 0.35rem;
   align-items: flex-end;
   padding: 0.3rem 1.2rem 0;
@@ -132,6 +133,7 @@ main {
 
 /* global commands: builder + broadcast side by side across the top */
 .g-cols { display: grid; grid-template-columns: 2fr 1fr; gap: 1.2rem; align-items: start; }
+.g-cols > * { min-width: 0; }
 .g-broadcast h3 { margin-top: 0; }
 @media (max-width: 750px) { .g-cols { grid-template-columns: 1fr; } }
 
@@ -144,6 +146,7 @@ main {
   display: flex;
   flex-direction: column;
   min-height: 260px;
+  min-width: 0; /* grid items must shrink to their track on small screens */
 }
 .panel h2 {
   margin: 0 0 0.7rem;
@@ -238,6 +241,7 @@ input::placeholder { color: #707070; }
 input:focus { outline: none; border-color: #fff; }
 label { color: var(--dim); font-size: 0.8rem; user-select: none; }
 input[type="checkbox"] { accent-color: #707070; }
+input, select { max-width: 100%; }
 
 select {
   background: #000;
@@ -367,7 +371,7 @@ h3.bio-biome { margin: 1rem 0 0.25rem; font-size: 0.9rem; color: var(--ink); }
 
 /* Gear recovery */
 .rec-controls { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
-.rec-controls select { max-width: 24rem; }
+.rec-controls select { max-width: min(24rem, 100%); }
 .rec-upload { font-size: 0.8rem; }
 .rec-upload input { font-family: var(--pixel); font-size: 0.75rem; color: var(--ink); }
 #rec-items {
@@ -473,3 +477,26 @@ a.pc-name:hover { text-decoration: underline; }
 #console-panel .prompt { color: var(--accent); font-size: 1rem; }
 #console-out .cmd { color: var(--gold); }
 #console-out .err { color: var(--red); }
+
+/* ----- phones & small tablets ----- */
+@media (max-width: 750px) {
+  header { padding: 0.6rem 0.75rem 0.4rem; gap: 0.6rem; }
+  #sky { font-size: 0.78rem; padding: 0.25rem 0.5rem; gap: 0.4rem; }
+  #tabs { padding: 0.3rem 0.75rem 0; gap: 0.25rem; }
+  #tabs .tab { padding: 0.35rem 0.55rem; font-size: 0.78rem; }
+  main { padding: 0.5rem 0.75rem 1rem; }
+  .panel { padding: 0.9rem 0.8rem 1rem; min-height: 0; }
+  /* iOS zooms into focused inputs below 16px — keep form text at 16px
+     (selectors must match the base rules' specificity to win) */
+  input[type="text"], input:not([type]), select { font-size: 16px; }
+  /* bigger touch targets */
+  button { padding: 0.55rem 0.95rem; }
+  button.small { padding: 0.35rem 0.6rem; }
+  .pc-head { flex-wrap: wrap; }
+  .detail-head { flex-wrap: wrap; }
+  .bar-table { grid-template-columns: minmax(5.5rem, auto) 1fr minmax(3rem, auto); }
+  /* recovery rows: drop the slot column, keep name/detail/give */
+  .rec-where { display: none; }
+  #rec-items { grid-template-columns: 1fr auto auto; }
+  #forge-item { max-width: 100%; flex: 1 1 100%; }
+}
