@@ -171,6 +171,20 @@ def test_broadcast_flattens_whitespace(client, rcon_calls):
     assert rcon_calls == [("say hello everyone there", False)]
 
 
+def test_keepinv_reports_each_dimension(client, monkeypatch):
+    async def fake(command, *, expect_disconnect=False):
+        if command.startswith("execute in minecraft:the_nether"):
+            return "Gamerule keep_inventory is currently set to: false"
+        if command.startswith("execute in minecraft:the_end"):
+            raise RconError("hiccup")
+        return "Gamerule keep_inventory is currently set to: true"
+
+    monkeypatch.setattr(main, "rcon_command", fake)
+    k = client.get("/api/keepinv").json()
+    assert k["online"] is True
+    assert k["dims"] == {"overworld": True, "nether": False, "end": None}
+
+
 def test_tps_endpoint_parses(client, monkeypatch):
     async def fake(command, *, expect_disconnect=False):
         return "§6TPS from last 1m, 5m, 15m: §a20.0, 20.0, 20.0"

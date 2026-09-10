@@ -259,6 +259,20 @@ select:focus { outline: none; border-color: #fff; }
 .wp-grab select { flex: 0 1 14rem; min-width: 0; }
 
 .preset-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.7rem; }
+
+/* per-dimension keep-inventory badges */
+.keepinv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin: -0.2rem 0 0.8rem; }
+.ki-label { font-size: 0.75rem; color: var(--dim); }
+.ki-badge {
+  background: #8b8b8b;
+  box-shadow: inset 2px 2px 0 #373737, inset -2px -2px 0 #ffffff;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  color: #2f2f2f;
+}
+.ki-badge b { font-weight: normal; color: #fff; text-shadow: 2px 2px 0 #3f3f3f; }
+.ki-badge.ki-on b { color: var(--green); }
+.ki-badge.ki-off b { color: var(--red); }
 #quick-form { flex-direction: column; align-items: stretch; gap: 0.6rem; }
 .quick-top { display: flex; gap: 0.5rem; }
 .quick-top select { flex: 1; min-width: 0; }

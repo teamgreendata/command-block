@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 66 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 67 tests, no network, no MC server
 node --test                                   # frontend builders + stat/detail/forge/biome data: 53 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -175,7 +175,9 @@ template (set empty to disable avatar fetching).
   `gamerule` over RCON only touches the overworld; nether/End need
   `execute in minecraft:the_nether run gamerule …`. The Keep-inventory-ON preset and the
   gamerule builder's "all" dimension option send all three commands (`gameruleCommands`
-  in quick-commands.js; specs may declare `buildMany` for multi-command sends).
+  in quick-commands.js; specs may declare `buildMany` for multi-command sends). The
+  dashboard shows live per-dimension keep_inventory badges via `GET /api/keepinv`
+  (polled with serverinfo; refreshed right after any keep_inventory command).
 - **This MC generation renamed all gamerules to snake_case** (doDaylightCycle →
   `advance_time`, doMobSpawning → `spawn_mobs`, keepInventory → `keep_inventory`…).
   The full registry lives in the server jar's `GameRules.class`; the curated list in

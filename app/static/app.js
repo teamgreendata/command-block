@@ -193,7 +193,23 @@ async function refreshClock() {
   clockTimer = setTimeout(refreshClock, 10000);
 }
 
+// per-dimension keep_inventory badges — the nether taught us to check
+async function refreshKeepInv() {
+  try {
+    const k = await api('/api/keepinv');
+    const row = $('#keepinv-row');
+    row.hidden = false;
+    for (const badge of row.querySelectorAll('.ki-badge')) {
+      const v = k.dims[badge.dataset.dim];
+      badge.querySelector('b').textContent = v === true ? 'on' : v === false ? 'OFF' : '–';
+      badge.classList.toggle('ki-on', v === true);
+      badge.classList.toggle('ki-off', v === false);
+    }
+  } catch { /* keep the last state */ }
+}
+
 async function refreshServerInfo() {
+  refreshKeepInv();
   try {
     const s = await api('/api/serverinfo');
     const rows = [
@@ -1061,6 +1077,7 @@ async function sendRaw(command, confirmText) {
     // keep the sky widget honest right away: time reflects live via RCON,
     // weather only hits disk on save — so show the just-set weather directly
     if (/^time /.test(command)) setTimeout(refreshClock, 500);
+    if (command.includes('keep_inventory')) setTimeout(refreshKeepInv, 500);
     const wx = command.match(/^weather (clear|rain|thunder)/);
     if (wx) showWeather(wx[1]);
   } catch (err) {

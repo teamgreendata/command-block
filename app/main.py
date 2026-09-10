@@ -791,6 +791,32 @@ async def serverinfo():
     return out
 
 
+# ---------------------------------------------------------------- keep-inventory status
+
+# Game rules are per-dimension in this generation — after the nether gear-loss
+# incident the dashboard shows keep_inventory for all three, queried live.
+_GAMERULE_VALUE_RE = re.compile(r"set to: (\w+)")
+_DIM_PREFIXES = {
+    "overworld": "",
+    "nether": "execute in minecraft:the_nether run ",
+    "end": "execute in minecraft:the_end run ",
+}
+
+
+@app.get("/api/keepinv")
+async def keepinv():
+    out: dict = {"online": False, "dims": {}}
+    for dim, prefix in _DIM_PREFIXES.items():
+        try:
+            raw = strip_colors(await rcon_command(f"{prefix}gamerule keep_inventory"))
+            m = _GAMERULE_VALUE_RE.search(raw)
+            out["dims"][dim] = (m.group(1) == "true") if m else None
+            out["online"] = True
+        except RconError:
+            out["dims"][dim] = None
+    return out
+
+
 # ---------------------------------------------------------------- item icons
 
 # Second (and last) class of backend-outbound call, same treatment as avatars:
