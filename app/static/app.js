@@ -300,6 +300,7 @@ async function refreshWhitelist() {
   try {
     const w = await api('/api/whitelist');
     whitelistNames = w.players;
+    renderRecapRows();
     fillList(ul, w.players.map(name => row(name, [
       ['remove', 'small', () => whitelistRemove(name)],
     ])), 'whitelist is empty');
@@ -581,6 +582,80 @@ function renderBiomes() {
 
 renderBiomes();
 $('#bio-search').addEventListener('input', renderBiomes);
+
+// ---------------------------------------------------------------- email recaps
+
+let recapConfig = { smtp: false, recipients: {} };
+
+function renderRecapRows() {
+  const wrap = $('#recap-rows');
+  wrap.replaceChildren();
+  $('#recap-smtp').textContent = recapConfig.smtp
+    ? 'Daily recaps go out after 7:00, weekly ones on Monday. Emails only send for cadences other than "none".'
+    : 'SMTP is not configured — add SMTP_HOST/SMTP_USER/SMTP_PASS to .env on the server to enable sending.';
+  const names = [...new Set([...whitelistNames, ...Object.keys(recapConfig.recipients)])];
+  if (!names.length) {
+    wrap.appendChild(el('p', 'empty', 'no players yet'));
+    return;
+  }
+  for (const name of names) {
+    const cfg = recapConfig.recipients[name] || {};
+    const row = el('div', 'recap-row');
+    row.dataset.player = name;
+    row.appendChild(el('span', 'recap-name', name));
+    const email = document.createElement('input');
+    email.type = 'text';
+    email.placeholder = 'email address';
+    email.value = cfg.email || '';
+    email.spellcheck = false;
+    row.appendChild(email);
+    const cad = document.createElement('select');
+    for (const c of ['none', 'daily', 'weekly', 'both']) {
+      const o = document.createElement('option');
+      o.value = o.textContent = c;
+      cad.appendChild(o);
+    }
+    cad.value = cfg.cadence || 'none';
+    row.appendChild(cad);
+    const test = el('button', 'small', 'Test');
+    test.type = 'button';
+    test.disabled = !recapConfig.smtp || !cfg.email;
+    test.addEventListener('click', async () => {
+      test.disabled = true;
+      try {
+        await api('/api/recap/test', { player: name, kind: 'weekly' });
+        flash(`Test recap sent to ${cfg.email}.`);
+      } catch (e) { flash(e.message, true); }
+      test.disabled = false;
+    });
+    row.appendChild(test);
+    wrap.appendChild(row);
+  }
+}
+
+async function refreshRecapConfig() {
+  try {
+    recapConfig = await api('/api/recap/config');
+  } catch { /* leave defaults */ }
+  renderRecapRows();
+}
+
+$('#recap-save').addEventListener('click', async () => {
+  const recipients = {};
+  for (const row of $('#recap-rows').querySelectorAll('.recap-row')) {
+    const [email, cadence] = [row.querySelector('input').value.trim(),
+                              row.querySelector('select').value];
+    if (email || cadence !== 'none') {
+      recipients[row.dataset.player] = { email, cadence };
+    }
+  }
+  try {
+    const r = await api('/api/recap/recipients', { recipients });
+    recapConfig.recipients = r.recipients;
+    renderRecapRows();
+    flash('Recap settings saved.');
+  } catch (e) { flash(e.message, true); }
+});
 
 // ---------------------------------------------------------------- gear recovery
 
@@ -1324,6 +1399,7 @@ renderCards();
 refreshSettings();
 refreshWaypoints();
 refreshRecoverySources();
+refreshRecapConfig();
 refreshStatus();
 refreshClock();
 refreshServerInfo();

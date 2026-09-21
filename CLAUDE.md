@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 67 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 78 tests, no network, no MC server
 node --test                                   # frontend builders + stat/detail/forge/biome data: 53 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -106,8 +106,8 @@ template (set empty to disable avatar fetching).
   live in `app/static/stats.js` (DOM-free, node-tested), the selection persists via
   GET/POST `/api/settings` → `settings.json` in `cb_data` (backend is dumb storage;
   `card_stats: null` = frontend defaults).
-- **Dashboard state lives in the `cb_data` volume**: `waypoints.json` and
-  `settings.json`. Waypoints details: `waypoints.json` in the `cb_data`
+- **Dashboard state lives in the `cb_data` volume**: `waypoints.json`, `settings.json`,
+  `recap.json`, `recap_state.json` and `snapshots/` (recap history). Waypoints details: `waypoints.json` in the `cb_data`
   named volume (`CB_DATA` overrides the dir for tests; the Dockerfile pre-creates
   `/cb-data` owned by `dash` so the volume inherits writable ownership). CRUD via
   GET/POST `/api/waypoints` (names ≤32 chars of letters/digits/spaces/-_', positions
@@ -125,6 +125,15 @@ template (set empty to disable avatar fetching).
   curated keys), and an auto-formatted "everything else" long tail. Bar charts are
   single-hue per panel (MC chat colors, values always visible as text) — keep it that
   way; don't mix hues within one bar table.
+- **Email recaps** (`app/recap.py`, wired in main): an asyncio loop (started via
+  FastAPI lifespan; `RECAP_DISABLED=1` skips it — tests) snapshots every player's raw
+  stat sections daily after `RECAP_HOUR` (default 07:00 container-local; set `TZ`),
+  prunes to 40 days, and emails daily/weekly digests by diffing snapshots (weekly on
+  `RECAP_WEEKLY_DAY`, default Monday). Recipients + cadence (none/daily/weekly/both) are
+  per player on the Settings tab → `recap.json`. SMTP is env-only (`SMTP_HOST/PORT/
+  USER/PASS/FROM` — Gmail app password works); no SMTP = snapshots still accumulate,
+  sends skip. `POST /api/recap/test` sends one real email now. All schedule/delta/render
+  logic is pure + unit-tested; the E2E proves the full SMTP protocol against a local sink.
 - ⚠️ **The container must run as uid 1000** (same as the minecraft container's user):
   the server writes playerdata `.dat` files as mode **600**, so any other uid gets
   permission-denied and XP/health/food silently null out — while the stats JSONs (664)

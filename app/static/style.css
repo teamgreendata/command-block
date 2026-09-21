@@ -401,6 +401,13 @@ h3.bio-biome { margin: 1rem 0 0.25rem; font-size: 0.9rem; color: var(--ink); }
 .rec-name { font-size: 0.85rem; color: var(--ink); overflow-wrap: anywhere; }
 .rec-detail { font-size: 0.75rem; color: #7a5b16; text-align: right; }
 
+/* Settings: email recaps */
+.recap-rows { display: flex; flex-direction: column; gap: 0.45rem; margin: 0.5rem 0; }
+.recap-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.recap-name { flex: 0 0 8rem; font-size: 0.85rem; color: var(--ink); overflow-wrap: anywhere; }
+.recap-row input { flex: 1 1 14rem; }
+.recap-row select { flex: 0 0 auto; }
+
 /* Settings: the card-stats checklist */
 .settings-grid {
   display: grid;

@@ -25,14 +25,26 @@ from fastapi.staticfiles import StaticFiles
 from mcstatus import JavaServer
 from pydantic import BaseModel
 
-from app import nbt, rcon
+from contextlib import asynccontextmanager
+from datetime import date, datetime
+
+from app import nbt, rcon, recap
 from app.rcon import RconError
 
 PING_PORT = 25565  # server-list ping; RCON port comes from the env
 STATIC_DIR = Path(__file__).parent / "static"
 MAX_LOG_LINES = 500
 
-app = FastAPI(title="command-block", docs_url=None, redoc_url=None, openapi_url=None)
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    task = asyncio.create_task(_recap_loop()) if not _env("RECAP_DISABLED") else None
+    yield
+    if task:
+        task.cancel()
+
+
+app = FastAPI(title="command-block", docs_url=None, redoc_url=None, openapi_url=None,
+              lifespan=_lifespan)
 
 
 def _env(name: str, default: str | None = None) -> str | None:
@@ -789,6 +801,145 @@ async def serverinfo():
         out["world_size_mb"] = round(size / 1e6, 1)
     out["day"] = _read_day(data)
     return out
+
+
+# ---------------------------------------------------------------- email recaps
+
+RECAP_HOUR = int(_env("RECAP_HOUR", "7"))          # send after 07:00 local (TZ env)
+RECAP_WEEKLY_DAY = int(_env("RECAP_WEEKLY_DAY", "0"))  # 0 = Monday
+
+
+def _collect_all_sections() -> dict:
+    """Current raw stats for every known player — the snapshot payload."""
+    data = _data_dir()
+    dirs = _player_dirs(data)
+    players: dict[str, dict] = {}
+    for name, uuid in (_name_uuid_pairs(data) or []):
+        if dirs is None:
+            continue
+        stats_dir, playerdata_dir = dirs
+        entry: dict = {"sections": {}, "xp_level": None}
+        try:
+            entry["sections"] = json.loads(
+                (stats_dir / f"{uuid}.json").read_text()).get("stats", {})
+        except (OSError, ValueError):
+            pass
+        raw = _read_nbt_file(playerdata_dir / f"{uuid}.dat")
+        if raw is not None:
+            entry["xp_level"] = _nbt_int(raw, b"XpLevel")
+        players[name] = entry
+    return players
+
+
+def _send_recaps(kind: str, today_iso: str, only: dict | None = None) -> list[str]:
+    """Render + send `kind` recaps. Recipients come from recap.json filtered
+    by cadence, unless `only` overrides them (the test-send path)."""
+    snapshot = recap.load_snapshot(today_iso)
+    if snapshot is None:
+        return ["no snapshot for today — skipped"]
+    if only is not None:
+        recipients = only
+    else:
+        want = {"daily": ("daily", "both"), "weekly": ("weekly", "both")}[kind]
+        recipients = {n: c for n, c in recap.load_recipients().items()
+                      if c.get("email") and c.get("cadence") in want}
+    if not recipients:
+        return []
+    if kind == "weekly":
+        target = date.fromisoformat(today_iso).toordinal() - 6
+        baseline_day = date.fromordinal(target).isoformat()
+        prev = recap.load_snapshot(baseline_day) or recap.closest_snapshot_before(baseline_day)
+    else:
+        prev = recap.closest_snapshot_before(today_iso)
+    prev = prev or {"date": None, "players": {}}
+    if prev["date"]:
+        label = ("your day on the server" if kind == "daily"
+                 else f"week in review (since {prev['date']})")
+    else:
+        label = "story so far (first recap!)"
+    periods = {name: recap.compute_period(cur, prev["players"].get(name, {}))
+               for name, cur in snapshot["players"].items()}
+    server_name = _env("RECAP_SERVER_NAME", "the server")
+    log = []
+    for name, cfg in recipients.items():
+        if name not in periods:
+            continue
+        subject, html, plain = recap.render_recap(name, label, periods, server_name, kind)
+        try:
+            recap.send_email(cfg["email"], subject, html, plain)
+            log.append(f"sent {kind} recap to {name}")
+        except Exception as exc:  # log and carry on with other recipients
+            log.append(f"FAILED {kind} recap to {name}: {exc}")
+    return log
+
+
+async def _recap_loop():
+    while True:
+        try:
+            state = recap.load_state()
+            acts = recap.plan_actions(datetime.now(), state, RECAP_HOUR, RECAP_WEEKLY_DAY)
+            today_iso = date.today().isoformat()
+            if "snapshot" in acts:
+                recap.write_snapshot(today_iso, _collect_all_sections())
+                state["snapshot"] = today_iso
+                recap.save_state(state)
+            for kind, marker in (("daily", today_iso),
+                                 ("weekly", f"{datetime.now().isocalendar().year}-W"
+                                            f"{datetime.now().isocalendar().week:02d}")):
+                if kind in acts:
+                    if recap.smtp_configured():
+                        for line in await asyncio.to_thread(_send_recaps, kind, today_iso):
+                            print(f"[recap] {line}", flush=True)
+                    state[kind] = marker
+                    recap.save_state(state)
+        except Exception as exc:
+            print(f"[recap] loop error: {exc}", flush=True)
+        await asyncio.sleep(600)
+
+
+class RecapRecipients(BaseModel):
+    recipients: dict
+
+
+class RecapTest(BaseModel):
+    player: str
+    kind: Literal["daily", "weekly"] = "weekly"
+
+
+@app.get("/api/recap/config")
+async def recap_config():
+    return {"smtp": recap.smtp_configured(), "recipients": recap.load_recipients(),
+            "hour": RECAP_HOUR, "weekly_day": RECAP_WEEKLY_DAY}
+
+
+@app.post("/api/recap/recipients")
+async def recap_recipients(body: RecapRecipients):
+    problem = recap.validate_recipients(body.recipients)
+    if problem:
+        return _bad_request(problem)
+    recap.store_recipients(body.recipients)
+    return {"recipients": body.recipients}
+
+
+@app.post("/api/recap/test")
+async def recap_test(body: RecapTest):
+    if not recap.smtp_configured():
+        return _bad_request("SMTP is not configured — add SMTP_* to .env first.")
+    cfg = recap.load_recipients().get(body.player, {})
+    if not cfg.get("email"):
+        return _bad_request(f"No email saved for {body.player}.")
+    today_iso = date.today().isoformat()
+    recap.write_snapshot(today_iso, _collect_all_sections())  # fresh numbers
+    state = recap.load_state()
+    state["snapshot"] = today_iso
+    recap.save_state(state)
+    if body.player not in (recap.load_snapshot(today_iso) or {"players": {}})["players"]:
+        return _bad_request(f"No stats found for {body.player}.")
+    lines = await asyncio.to_thread(
+        _send_recaps, body.kind, today_iso, {body.player: cfg})
+    if any(line.startswith("FAILED") for line in lines):
+        return JSONResponse(status_code=502, content={"error": "; ".join(lines)})
+    return {"sent": lines}
 
 
 # ---------------------------------------------------------------- keep-inventory status
