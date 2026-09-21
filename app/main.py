@@ -999,6 +999,99 @@ async def itemicon(item_id: str):
     return _avatar_reply(data)
 
 
+# ---------------------------------------------------------------- live inventory
+
+_ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
+
+
+def _roman(n: int) -> str:
+    return _ROMAN[n] if 0 < n < len(_ROMAN) else str(n)
+
+
+def _pretty_mc(mc_id: str) -> str:
+    return str(mc_id).split(":")[-1].replace("_", " ").title()
+
+
+def _item_view(item) -> dict | None:
+    """One inventory stack -> what the tooltip needs."""
+    if not isinstance(item, dict) or "id" not in item:
+        return None
+    comps = item.get("components", {})
+    ench = comps.get("minecraft:enchantments", {})
+    if isinstance(ench, dict) and isinstance(ench.get("levels"), dict):
+        ench = ench["levels"]
+    enchants = ([f"{_pretty_mc(k)} {_roman(int(v))}" for k, v in ench.items()]
+                if isinstance(ench, dict) else [])
+    extras = []
+    dmg = comps.get("minecraft:damage")
+    if isinstance(dmg, int) and dmg > 0:
+        extras.append(f"Damage: {dmg}")
+    name = None
+    cn = comps.get("minecraft:custom_name")
+    if isinstance(cn, str):  # either a plain string or a JSON text component
+        try:
+            parsed = json.loads(cn)
+            name = parsed.get("text") if isinstance(parsed, dict) else (
+                parsed if isinstance(parsed, str) else None)
+        except ValueError:
+            name = cn
+    elif isinstance(cn, dict):
+        name = cn.get("text")
+    shown = {"minecraft:enchantments", "minecraft:damage", "minecraft:custom_name"}
+    more = len([k for k in comps if k not in shown])
+    return {"id": item["id"], "count": int(item.get("count", 1)), "enchants": enchants,
+            "extras": extras, "custom_name": name, "more_components": more}
+
+
+@app.get("/api/inventory/{name}")
+async def inventory(name: str, fresh: int = 1):
+    """Slot-keyed inventory from the playerdata .dat. Inventories only hit
+    disk on save, so by default we ask the server to save first — that makes
+    the view effectively live for online players."""
+    if not _NAME_RE.match(name):
+        return _bad_request("Invalid player name (letters, digits, underscore; max 16).")
+    data = _data_dir()
+    match = next(
+        (p for p in (_name_uuid_pairs(data) or []) if p[0].lower() == name.lower()), None)
+    dirs = _player_dirs(data)
+    if match is None or dirs is None:
+        return JSONResponse(status_code=404, content={"error": f"Unknown player {name}."})
+    if fresh:
+        try:
+            await rcon_command("save-all flush")
+            await asyncio.sleep(0.3)  # let the write land
+        except RconError:
+            pass  # server down: show the last-saved state
+    path = dirs[1] / f"{match[1]}.dat"
+    try:
+        root = nbt.parse(path.read_bytes())
+    except (OSError, ValueError):
+        return JSONResponse(status_code=404, content={"error": "No player save found."})
+    slots: dict = {}
+    for item in root.get("Inventory", []):
+        view = _item_view(item)
+        if view:
+            slots[str(int(item.get("Slot", 0)))] = view
+    equipment = root.get("equipment", {})
+    if isinstance(equipment, dict):
+        for key, it in equipment.items():
+            if key == "mainhand":
+                continue
+            view = _item_view(it)
+            if view:
+                slots[str(_EQUIPMENT_SLOTS.get(key, 105))] = view
+    ender: dict = {}
+    for item in root.get("EnderItems", []):
+        view = _item_view(item)
+        if view:
+            ender[str(int(item.get("Slot", 0)))] = view
+    try:
+        saved_at = int(path.stat().st_mtime)
+    except OSError:
+        saved_at = None
+    return {"name": match[0], "slots": slots, "ender": ender, "saved_at": saved_at}
+
+
 # ---------------------------------------------------------------- gear recovery
 
 # Reads an inventory out of a playerdata .dat (the live one, the previous

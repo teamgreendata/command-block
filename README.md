@@ -6,7 +6,8 @@ size, seed, MSPT, distances…), a card per player with their full-body skin ren
 and a configurable stat list (last seen, hours played, deaths, kills, nemesis,
 distance, diamonds, XP and a dozen more — pick which on the Settings tab), a
 per-player analytics page (click the name: deaths by cause, kills, blocks
-harvested, items used/crafted/worn out, movement — all as breakdowns), a gear
+harvested, items used/crafted/worn out, movement — all as breakdowns — plus a
+live in-game-style inventory view with hover tooltips for enchantments), a gear
 recovery tab (read any playerdata save or backup .dat and re-give the items,
 enchantments included), an item forge (build enchanted gear from dropdowns), a biome catalog (natural + mob-dropped items with sprites, one-click give), plus the player-targeted commands right on the card
 (teleport, give, effect, gamemode, XP, message, summon, clear, kill, kick, ban),

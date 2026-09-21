@@ -1036,6 +1036,8 @@ async function renderPlayerDetail(name) {
   head.appendChild(hd);
   wrap.appendChild(head);
 
+  wrap.appendChild(inventoryPanel(d.name));
+
   // deaths: mobs itemized; the rest is environmental (game doesn't itemize it)
   const deaths = deathAnalysis(sections);
   const deathsPanel = detailPanel(`Deaths — ${numFmt(deaths.total)}`,
@@ -1096,6 +1098,131 @@ async function renderPlayerDetail(name) {
     wrap.appendChild(detailPanel('Everything else', plainRows({ rows: leftover, more: 0 }, '')));
   }
 }
+
+// ---------------------------------------------------------------- inventory viewer
+
+let invTip = null;
+
+function hideInvTip() {
+  if (invTip) invTip.hidden = true;
+}
+
+function showInvTip(item, cell) {
+  if (!invTip) {
+    invTip = el('div', 'inv-tip');
+    invTip.hidden = true;
+    document.body.appendChild(invTip);
+  }
+  invTip.replaceChildren();
+  const pretty = item.id.replace(/^minecraft:/, '').replace(/_/g, ' ')
+    .replace(/\b[a-z]/g, c => c.toUpperCase());
+  const name = el('div', 'it-name', item.custom_name || pretty);
+  if (item.custom_name) name.classList.add('it-named');
+  else if (item.enchants.length) name.classList.add('it-ench');
+  invTip.appendChild(name);
+  if (item.custom_name) invTip.appendChild(el('div', 'it-sub', pretty));
+  for (const line of item.enchants) invTip.appendChild(el('div', 'it-line', line));
+  for (const line of item.extras) invTip.appendChild(el('div', 'it-extra', line));
+  if (item.more_components) {
+    invTip.appendChild(el('div', 'it-extra', `+ ${item.more_components} more component${item.more_components > 1 ? 's' : ''}`));
+  }
+  invTip.hidden = false;
+  const r = cell.getBoundingClientRect();
+  const w = invTip.offsetWidth;
+  let x = r.right + 8 + window.scrollX;
+  if (x + w > window.scrollX + document.documentElement.clientWidth - 4) {
+    x = Math.max(4, r.left - w - 8 + window.scrollX);
+  }
+  invTip.style.left = `${x}px`;
+  invTip.style.top = `${r.top + window.scrollY - 4}px`;
+}
+
+function invSlot(item) {
+  const cell = el('div', 'inv-slot');
+  if (!item) return cell;
+  if (item.enchants.length) cell.classList.add('inv-glint');
+  const img = el('img');
+  img.alt = '';
+  img.loading = 'lazy';
+  img.src = `/api/itemicon/${item.id.replace('minecraft:', '')}`;
+  img.addEventListener('error', () => {
+    img.remove();
+    cell.appendChild(el('span', 'inv-fallback', '?'));
+  }, { once: true });
+  cell.appendChild(img);
+  if (item.count > 1) cell.appendChild(el('span', 'inv-count', String(item.count)));
+  cell.addEventListener('mouseenter', () => showInvTip(item, cell));
+  cell.addEventListener('mouseleave', hideInvTip);
+  cell.addEventListener('click', e => {
+    e.stopPropagation();
+    invTip && !invTip.hidden ? hideInvTip() : showInvTip(item, cell);
+  });
+  return cell;
+}
+
+function invGrid(slots, numbers, cols) {
+  const grid = el('div', 'inv-grid');
+  grid.style.gridTemplateColumns = `repeat(${cols}, var(--slot))`;
+  for (const n of numbers) grid.appendChild(invSlot(slots[String(n)]));
+  return grid;
+}
+
+async function fillInventoryPanel(panel, name) {
+  const body = panel.querySelector('.inv-body');
+  body.replaceChildren(el('p', 'empty', 'reading player save…'));
+  let inv;
+  try {
+    inv = await api(`/api/inventory/${encodeURIComponent(name)}`);
+  } catch (e) {
+    body.replaceChildren(el('p', 'empty', e.message));
+    return;
+  }
+  body.replaceChildren();
+  if (!Object.keys(inv.slots).length && !Object.keys(inv.ender).length) {
+    body.appendChild(el('p', 'empty', 'empty-handed — nothing in this save yet'));
+    return;
+  }
+  const layout = el('div', 'inv-layout');
+  const gear = el('div', 'inv-gear');
+  gear.appendChild(el('div', 'inv-mini-label', 'armor'));
+  gear.appendChild(invGrid(inv.slots, [103, 102, 101, 100], 1));
+  gear.appendChild(el('div', 'inv-mini-label', 'offhand'));
+  gear.appendChild(invGrid(inv.slots, [-106], 1));
+  layout.appendChild(gear);
+  const packs = el('div', 'inv-packs');
+  packs.appendChild(invGrid(inv.slots,
+    [...Array(27).keys()].map(i => i + 9), 9));
+  const hot = invGrid(inv.slots, [...Array(9).keys()], 9);
+  hot.classList.add('inv-hotbar');
+  packs.appendChild(hot);
+  layout.appendChild(packs);
+  body.appendChild(layout);
+  if (Object.keys(inv.ender).length) {
+    body.appendChild(el('h3', null, 'Ender chest'));
+    body.appendChild(invGrid(inv.ender, [...Array(27).keys()], 9));
+  }
+  if (inv.saved_at) {
+    body.appendChild(el('p', 'quick-desc',
+      `as of the last save — ${timeAgoText(Math.floor(Date.now() / 1000) - inv.saved_at)}`));
+  }
+}
+
+function inventoryPanel(name) {
+  const panel = el('section', 'panel detail-panel wide');
+  const h2 = el('h2', null, 'Inventory');
+  const tools = el('span', 'h2-tools');
+  const btn = el('button', 'small', 'refresh');
+  btn.type = 'button';
+  btn.addEventListener('click', () => fillInventoryPanel(panel, name));
+  tools.appendChild(btn);
+  h2.appendChild(tools);
+  panel.appendChild(h2);
+  panel.appendChild(el('div', 'inv-body'));
+  fillInventoryPanel(panel, name);
+  return panel;
+}
+
+document.addEventListener('click', hideInvTip);
 
 // ---------------------------------------------------------------- restart
 

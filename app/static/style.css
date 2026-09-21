@@ -383,6 +383,52 @@ h3.bio-biome { margin: 1rem 0 0.25rem; font-size: 0.9rem; color: var(--ink); }
 #bio-search { flex: 0 1 16rem; }
 #bio-count { flex: 0 0 4rem; }
 
+/* Inventory viewer — the in-game look */
+:root { --slot: 40px; }
+.inv-layout { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+.inv-gear { display: flex; flex-direction: column; gap: 2px; }
+.inv-mini-label { font-size: 0.65rem; color: var(--dim); margin: 0.15rem 0 0.1rem; }
+.inv-grid { display: grid; gap: 2px; }
+.inv-hotbar { margin-top: 8px; }
+.inv-slot {
+  width: var(--slot);
+  height: var(--slot);
+  background: #8b8b8b;
+  box-shadow: inset 2px 2px 0 #373737, inset -2px -2px 0 #ffffff;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.inv-slot img { width: 30px; height: 30px; image-rendering: pixelated; pointer-events: none; }
+.inv-slot.inv-glint { background: #9b86ae; } /* enchanted shimmer */
+.inv-count {
+  position: absolute;
+  right: 2px;
+  bottom: 0;
+  font-size: 0.8rem;
+  color: #fff;
+  text-shadow: 2px 2px 0 #3f3f3f;
+  pointer-events: none;
+}
+.inv-fallback { color: #555; font-size: 1rem; }
+.inv-tip {
+  position: absolute;
+  z-index: 50;
+  background: rgba(16, 0, 16, 0.96);
+  border: 2px solid #5b1ca8;
+  padding: 0.45rem 0.6rem;
+  max-width: 260px;
+  pointer-events: none;
+  font-size: 0.8rem;
+}
+.it-name { color: #fff; }
+.it-name.it-ench { color: #55ffff; }
+.it-name.it-named { color: #ffaa00; font-style: italic; }
+.it-sub { color: #7a7a7a; font-size: 0.7rem; }
+.it-line { color: #a8a8a8; }
+.it-extra { color: #6e6e6e; font-size: 0.72rem; }
+
 /* Gear recovery */
 .rec-controls { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
 .rec-controls select { max-width: min(24rem, 100%); }
@@ -520,4 +566,6 @@ a.pc-name:hover { text-decoration: underline; }
   .rec-where { display: none; }
   #rec-items { grid-template-columns: 1fr auto auto; }
   #forge-item { max-width: 100%; flex: 1 1 100%; }
+  :root { --slot: 34px; } /* 9 columns must fit a phone */
+  .inv-slot img { width: 26px; height: 26px; }
 }

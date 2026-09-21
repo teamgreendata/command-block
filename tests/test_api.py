@@ -585,6 +585,80 @@ def test_recovery_reads_modern_equipment_compound(client, mc_data):
                                    '[minecraft:enchantments={"minecraft:protection":4}]')
 
 
+def _viewer_dat() -> bytes:
+    """Modern playerdata with equipment, inventory, ender chest, and the
+    component kinds the viewer tooltip cares about."""
+    from tests.test_nbt import named, root, t_byte, t_compound, t_int, t_list, t_string
+
+    def stack(item_id, count, *components):
+        children = [named(8, "id", t_string(item_id)), named(3, "count", t_int(count))]
+        if components:
+            children.append(named(10, "components", t_compound(*components)))
+        return t_compound(*children)
+
+    def inv_item(slot, item_id, count, *components):
+        return t_compound(
+            named(1, "Slot", t_byte(slot)),
+            named(8, "id", t_string(item_id)),
+            named(3, "count", t_int(count)),
+            *((named(10, "components", t_compound(*components)),) if components else ()))
+
+    sword_comps = (
+        named(10, "minecraft:enchantments", t_compound(
+            named(3, "minecraft:sharpness", t_int(5)),
+            named(3, "minecraft:looting", t_int(3)))),
+        named(3, "minecraft:damage", t_int(120)),
+        named(8, "minecraft:custom_name", t_string('{"text":"Ol\' Reliable"}')),
+        named(3, "minecraft:repair_cost", t_int(7)),
+    )
+    return root(
+        named(9, "Inventory", t_list(
+            10,
+            inv_item(0, "minecraft:netherite_sword", 1, *sword_comps),
+            inv_item(9, "minecraft:torch", 64),
+        )),
+        named(9, "EnderItems", t_list(10, inv_item(3, "minecraft:diamond", 64))),
+        named(10, "equipment", t_compound(
+            named(10, "head", stack("minecraft:netherite_helmet", 1,
+                                    named(10, "minecraft:enchantments", t_compound(
+                                        named(3, "minecraft:protection", t_int(4)))))),
+            named(10, "offhand", stack("minecraft:shield", 1)),
+            named(10, "mainhand", stack("minecraft:stick", 1)),  # must be skipped
+        )),
+    )
+
+
+def test_inventory_endpoint_layout_and_tooltips(client, mc_data, rcon_calls):
+    (mc_data / "world" / "playerdata" / f"{UUID_A}.dat").write_bytes(_viewer_dat())
+    inv = client.get("/api/inventory/alice").json()
+    assert rcon_calls == [("save-all flush", False)]  # fresh view saves first
+    sword = inv["slots"]["0"]
+    assert sword["enchants"] == ["Sharpness V", "Looting III"]
+    assert sword["custom_name"] == "Ol' Reliable"
+    assert sword["extras"] == ["Damage: 120"]
+    assert sword["more_components"] == 1  # repair_cost
+    assert inv["slots"]["9"] == {"id": "minecraft:torch", "count": 64, "enchants": [],
+                                 "extras": [], "custom_name": None, "more_components": 0}
+    assert inv["slots"]["103"]["enchants"] == ["Protection IV"]
+    assert inv["slots"]["-106"]["id"] == "minecraft:shield"
+    assert "105" not in inv["slots"]  # mainhand duplicate skipped
+    assert inv["ender"]["3"]["count"] == 64
+    assert isinstance(inv["saved_at"], int)
+
+
+def test_inventory_fresh_zero_and_rcon_down(client, mc_data, rcon_calls, monkeypatch):
+    (mc_data / "world" / "playerdata" / f"{UUID_A}.dat").write_bytes(_viewer_dat())
+    client.get("/api/inventory/alice?fresh=0")
+    assert rcon_calls == []  # no forced save
+
+    async def down(command, *, expect_disconnect=False):
+        raise RconError("down")
+
+    monkeypatch.setattr(main, "rcon_command", down)
+    assert client.get("/api/inventory/alice").status_code == 200  # last-saved state
+    assert client.get("/api/inventory/nobody").status_code == 404
+
+
 def test_recovery_sources_and_upload(client, mc_data):
     (mc_data / "world" / "playerdata" / f"{UUID_A}.dat_old").write_bytes(_inventory_dat())
     src = client.get("/api/recovery/sources").json()["sources"]
