@@ -31,7 +31,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/python -m pytest                    # backend: 78 tests, no network, no MC server
-node --test                                   # frontend builders + stat/detail/forge/biome data: 53 tests (bare, not `node --test tests/`)
+node --test                                   # frontend builders + stat/detail/forge/biome data: 54 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
 ```
