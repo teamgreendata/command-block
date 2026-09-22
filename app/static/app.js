@@ -1185,10 +1185,10 @@ async function fillInventoryPanel(panel, name) {
   }
   const layout = el('div', 'inv-layout');
   const gear = el('div', 'inv-gear');
-  gear.appendChild(el('div', 'inv-mini-label', 'armor'));
   gear.appendChild(invGrid(inv.slots, [103, 102, 101, 100], 1));
-  gear.appendChild(el('div', 'inv-mini-label', 'offhand'));
-  gear.appendChild(invGrid(inv.slots, [-106], 1));
+  const offhand = invGrid(inv.slots, [-106], 1);
+  offhand.classList.add('inv-offhand');
+  gear.appendChild(offhand);
   layout.appendChild(gear);
   const packs = el('div', 'inv-packs');
   packs.appendChild(invGrid(inv.slots,

@@ -385,9 +385,11 @@ h3.bio-biome { margin: 1rem 0 0.25rem; font-size: 0.9rem; color: var(--ink); }
 
 /* Inventory viewer — the in-game look */
 :root { --slot: 40px; }
-.inv-layout { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+.inv-body { display: flex; flex-direction: column; align-items: center; }
+.inv-body .empty { align-self: flex-start; }
+.inv-layout { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
 .inv-gear { display: flex; flex-direction: column; gap: 2px; }
-.inv-mini-label { font-size: 0.65rem; color: var(--dim); margin: 0.15rem 0 0.1rem; }
+.inv-offhand { margin-top: 8px; }
 .inv-grid { display: grid; gap: 2px; }
 .inv-hotbar { margin-top: 8px; }
 .inv-slot {
