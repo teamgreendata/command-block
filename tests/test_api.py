@@ -635,15 +635,55 @@ def test_inventory_endpoint_layout_and_tooltips(client, mc_data, rcon_calls):
     sword = inv["slots"]["0"]
     assert sword["enchants"] == ["Sharpness V", "Looting III"]
     assert sword["custom_name"] == "Ol' Reliable"
-    assert sword["extras"] == ["Damage: 120"]
-    assert sword["more_components"] == 1  # repair_cost
+    # every component renders — nothing elided
+    assert sword["extras"] == ["Damage: 120", "Repair cost: 7"]
     assert inv["slots"]["9"] == {"id": "minecraft:torch", "count": 64, "enchants": [],
-                                 "extras": [], "custom_name": None, "more_components": 0}
+                                 "extras": [], "custom_name": None}
     assert inv["slots"]["103"]["enchants"] == ["Protection IV"]
     assert inv["slots"]["-106"]["id"] == "minecraft:shield"
     assert "105" not in inv["slots"]  # mainhand duplicate skipped
     assert inv["ender"]["3"]["count"] == 64
     assert isinstance(inv["saved_at"], int)
+
+
+def test_component_lines_render_everything():
+    cases = [
+        ("minecraft:trim", {"pattern": "minecraft:silence", "material": "minecraft:netherite"},
+         ["Trim: Silence + Netherite"]),
+        ("minecraft:potion_contents", {"potion": "minecraft:swiftness"},
+         ["Potion: Swiftness"]),
+        ("minecraft:potion_contents",
+         {"custom_effects": [{"id": "minecraft:regeneration", "amplifier": 1}]},
+         ["Effect: Regeneration II"]),
+        ("minecraft:lore", ['{"text":"Forged in fire"}'], ["“Forged in fire”"]),
+        ("minecraft:unbreakable", {}, ["Unbreakable"]),
+        ("minecraft:container",
+         [{"slot": 0, "item": {"id": "minecraft:diamond", "count": 5}},
+          {"slot": 1, "item": {"id": "minecraft:oak_log", "count": 64}}],
+         ["Contains:", "· 5× Diamond", "· 64× Oak Log"]),
+        ("minecraft:attribute_modifiers",
+         [{"type": "minecraft:attack_damage", "amount": 4.5}],
+         ["Attack Damage: +4.5"]),
+        ("minecraft:custom_model_data", 3, ["Custom Model Data: 3"]),  # generic fallback
+        ("minecraft:rarity", "epic", ["Rarity: epic"]),
+    ]
+    for key, val, expected in cases:
+        assert main._component_lines(key, val) == expected, key
+
+
+def test_stored_enchantments_read_like_enchantments(client, mc_data, rcon_calls):
+    from tests.test_nbt import named, root, t_byte, t_compound, t_int, t_list, t_string
+    book = t_compound(
+        named(1, "Slot", t_byte(7)),
+        named(8, "id", t_string("minecraft:enchanted_book")),
+        named(3, "count", t_int(1)),
+        named(10, "components", t_compound(
+            named(10, "minecraft:stored_enchantments", t_compound(
+                named(3, "minecraft:mending", t_int(1)))))))
+    (mc_data / "world" / "playerdata" / f"{UUID_A}.dat").write_bytes(
+        root(named(9, "Inventory", t_list(10, book))))
+    inv = client.get("/api/inventory/alice?fresh=0").json()
+    assert inv["slots"]["7"]["enchants"] == ["Mending I"]
 
 
 def test_inventory_fresh_zero_and_rcon_down(client, mc_data, rcon_calls, monkeypatch):

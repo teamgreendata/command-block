@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 80 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 82 tests, no network, no MC server
 node --test                                   # frontend builders + stat/detail/forge/biome data: 54 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -149,7 +149,10 @@ template (set empty to disable avatar fetching).
 - **Inventory viewer** (player detail page): `GET /api/inventory/{name}` returns the
   slot-keyed playerdata inventory (armor/offhand from the modern equipment compound,
   hotbar 0-8, main 9-35, EnderItems) with tooltip data (enchants as "Sharpness V",
-  custom names from JSON text components, damage, leftover component count). Player
+  custom names from JSON text components, damage — and EVERY other component
+  rendered readably via `_component_lines` (trim, potion, lore, shulker contents,
+  attribute modifiers, stored_enchantments on books; generic fallback for the rest).
+  The tooltip never elides information; it centers over the hovered slot. Player
   inventories only hit disk on save, so `fresh=1` (default) runs `save-all flush` over
   RCON first — effectively live; RCON down falls back to last-saved. The frontend draws
   the in-game grid (enchanted slots tinted, MC-style hover tooltip, icons via the

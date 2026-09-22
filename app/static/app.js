@@ -1123,18 +1123,19 @@ function showInvTip(item, cell) {
   if (item.custom_name) invTip.appendChild(el('div', 'it-sub', pretty));
   for (const line of item.enchants) invTip.appendChild(el('div', 'it-line', line));
   for (const line of item.extras) invTip.appendChild(el('div', 'it-extra', line));
-  if (item.more_components) {
-    invTip.appendChild(el('div', 'it-extra', `+ ${item.more_components} more component${item.more_components > 1 ? 's' : ''}`));
-  }
   invTip.hidden = false;
+  // centered over the slot; flips below when there's no headroom
   const r = cell.getBoundingClientRect();
   const w = invTip.offsetWidth;
-  let x = r.right + 8 + window.scrollX;
-  if (x + w > window.scrollX + document.documentElement.clientWidth - 4) {
-    x = Math.max(4, r.left - w - 8 + window.scrollX);
-  }
+  const h = invTip.offsetHeight;
+  const page = document.documentElement.clientWidth;
+  const x = Math.max(4, Math.min(r.left + r.width / 2 - w / 2 + window.scrollX,
+                                 window.scrollX + page - w - 4));
+  const y = r.top - h - 6 >= 0
+    ? r.top - h - 6 + window.scrollY
+    : r.bottom + 6 + window.scrollY;
   invTip.style.left = `${x}px`;
-  invTip.style.top = `${r.top + window.scrollY - 4}px`;
+  invTip.style.top = `${y}px`;
 }
 
 function invSlot(item) {
