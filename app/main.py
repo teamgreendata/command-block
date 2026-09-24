@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 
-from app import nbt, rcon, recap
+from app import nbt, rcon, recap, storage
 from app.rcon import RconError
 
 PING_PORT = 25565  # server-list ping; RCON port comes from the env
@@ -1001,120 +1001,23 @@ async def itemicon(item_id: str):
 
 # ---------------------------------------------------------------- live inventory
 
-_ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
+# item -> tooltip-view rendering is shared with the container scanner
+_component_lines = storage._component_lines  # kept addressable for tests
+_item_view = storage.item_view
 
 
-def _roman(n: int) -> str:
-    return _ROMAN[n] if 0 < n < len(_ROMAN) else str(n)
-
-
-def _pretty_mc(mc_id: str) -> str:
-    return str(mc_id).split(":")[-1].replace("_", " ").title()
-
-
-def _text_of(v) -> str:
-    """Flatten a Minecraft text component (JSON string, dict, or list)."""
-    if isinstance(v, str):
+@app.get("/api/storage")
+async def storage_scan(fresh: int = 1):
+    """Every player-relevant container in the world with its contents. Block
+    entities only hit disk on save, so fresh=1 asks the server to save first."""
+    if fresh:
         try:
-            parsed = json.loads(v)
-        except ValueError:
-            return v
-        return v if isinstance(parsed, (int, float)) else _text_of(parsed)
-    if isinstance(v, dict):
-        base = str(v.get("text", ""))
-        extra = v.get("extra")
-        if isinstance(extra, list):
-            base += "".join(_text_of(e) for e in extra)
-        return base
-    if isinstance(v, list):
-        return "".join(_text_of(e) for e in v)
-    return str(v)
-
-
-def _compact(v) -> str:
-    """Readable one-line rendering for arbitrary component values."""
-    if isinstance(v, dict):
-        return "{" + ", ".join(
-            f"{_pretty_mc(k) if ':' in str(k) else k}: {_compact(x)}"
-            for k, x in v.items()) + "}"
-    if isinstance(v, (list, nbt.ByteArray, nbt.IntArray, nbt.LongArray)):
-        return "[" + ", ".join(_compact(x) for x in v) + "]"
-    if isinstance(v, str):
-        return _pretty_mc(v) if v.startswith("minecraft:") else v
-    if isinstance(v, float):
-        return f"{v:g}"
-    return str(v)
-
-
-def _component_lines(key: str, val) -> list[str]:
-    """Every component becomes readable tooltip lines — nothing is elided."""
-    bare = key.split(":")[-1]
-    if bare == "trim" and isinstance(val, dict):
-        return [f"Trim: {_pretty_mc(str(val.get('pattern', '?')))} + "
-                f"{_pretty_mc(str(val.get('material', '?')))}"]
-    if bare == "potion_contents":
-        if isinstance(val, str):
-            return [f"Potion: {_pretty_mc(val)}"]
-        if isinstance(val, dict):
-            lines = []
-            if val.get("potion"):
-                lines.append(f"Potion: {_pretty_mc(str(val['potion']))}")
-            for eff in val.get("custom_effects", []) or []:
-                if isinstance(eff, dict) and eff.get("id"):
-                    amp = int(eff.get("amplifier", 0)) + 1
-                    lines.append(f"Effect: {_pretty_mc(str(eff['id']))} {_roman(amp)}")
-            return lines or [f"Potion Contents: {_compact(val)}"]
-    if bare == "lore" and isinstance(val, list):
-        return [f"“{_text_of(line)}”" for line in val]
-    if bare == "unbreakable":
-        return ["Unbreakable"]
-    if bare == "repair_cost":
-        return [f"Repair cost: {val}"]
-    if bare == "container" and isinstance(val, list):
-        lines = ["Contains:"]
-        for entry in val:
-            item = entry.get("item", {}) if isinstance(entry, dict) else {}
-            if isinstance(item, dict) and item.get("id"):
-                lines.append(f"· {int(item.get('count', 1))}× {_pretty_mc(item['id'])}")
-        return lines
-    if bare == "attribute_modifiers":
-        mods = (val if isinstance(val, list)
-                else val.get("modifiers", []) if isinstance(val, dict) else [])
-        lines = []
-        for m in mods:
-            if isinstance(m, dict) and m.get("type") is not None:
-                amount = float(m.get("amount", 0))
-                lines.append(f"{_pretty_mc(str(m['type']))}: "
-                             f"{'+' if amount >= 0 else ''}{amount:g}")
-        if lines:
-            return lines
-    return [f"{_pretty_mc(key)}: {_compact(val)}"]
-
-
-def _item_view(item) -> dict | None:
-    """One inventory stack -> everything the tooltip shows (complete: every
-    component renders — the UI never alludes to hidden information)."""
-    if not isinstance(item, dict) or "id" not in item:
-        return None
-    comps = item.get("components", {})
-    ench = comps.get("minecraft:enchantments") or comps.get("minecraft:stored_enchantments") or {}
-    if isinstance(ench, dict) and isinstance(ench.get("levels"), dict):
-        ench = ench["levels"]
-    enchants = ([f"{_pretty_mc(k)} {_roman(int(v))}" for k, v in ench.items()]
-                if isinstance(ench, dict) else [])
-    extras = []
-    dmg = comps.get("minecraft:damage")
-    if isinstance(dmg, int) and dmg > 0:
-        extras.append(f"Damage: {dmg}")
-    name = _text_of(comps["minecraft:custom_name"]) \
-        if "minecraft:custom_name" in comps else None
-    shown = {"minecraft:enchantments", "minecraft:stored_enchantments",
-             "minecraft:damage", "minecraft:custom_name"}
-    for key in comps:
-        if key not in shown:
-            extras.extend(_component_lines(key, comps[key]))
-    return {"id": item["id"], "count": int(item.get("count", 1)), "enchants": enchants,
-            "extras": extras, "custom_name": name or None}
+            await rcon_command("save-all flush")
+            await asyncio.sleep(0.3)
+        except RconError:
+            pass
+    containers = await asyncio.to_thread(storage.scan_containers, _data_dir())
+    return {"containers": containers}
 
 
 @app.get("/api/inventory/{name}")

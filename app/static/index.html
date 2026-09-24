@@ -28,6 +28,7 @@
   <button type="button" class="tab" data-tab="waypoints">Waypoints</button>
   <button type="button" class="tab" data-tab="forge">Forge</button>
   <button type="button" class="tab" data-tab="biomes">Biomes</button>
+  <button type="button" class="tab" data-tab="storage">Storage</button>
   <button type="button" class="tab" data-tab="recovery">Recovery</button>
   <button type="button" class="tab" data-tab="settings">Settings</button>
   <button type="button" class="tab" data-tab="logs">Logs</button>
@@ -194,6 +195,26 @@
         <select id="bio-target"></select>
       </div>
       <div id="bio-groups"></div>
+    </section>
+  </section>
+
+  <section class="tab-page" id="page-storage">
+    <section class="panel" id="storage-panel">
+      <h2>Storage
+        <span class="h2-tools">
+          <span id="st-count" class="quick-desc"></span>
+          <button id="st-refresh" type="button">refresh</button>
+        </span>
+      </h2>
+      <p class="quick-desc">Every placed chest, barrel and shulker box in the world, with its
+        contents. Untouched dungeon loot chests are excluded (a looted one looks placed —
+        the game doesn’t record who put a block down).</p>
+      <div class="rec-controls">
+        <input id="st-search" placeholder="filter by item, container, or coordinates…" spellcheck="false">
+      </div>
+      <h3>All storage combined</h3>
+      <div id="st-totals" class="st-totals"></div>
+      <div id="st-containers" class="st-containers"></div>
     </section>
   </section>
 

@@ -699,6 +699,17 @@ def test_inventory_fresh_zero_and_rcon_down(client, mc_data, rcon_calls, monkeyp
     assert client.get("/api/inventory/nobody").status_code == 404
 
 
+def test_storage_endpoint_fresh_semantics(client, mc_data, rcon_calls):
+    from app import storage as storage_mod
+    storage_mod._cache.clear()
+    r = client.get("/api/storage")
+    assert r.status_code == 200
+    assert r.json() == {"containers": []}  # fixture world has no region files
+    assert rcon_calls == [("save-all flush", False)]
+    client.get("/api/storage?fresh=0")
+    assert len(rcon_calls) == 1  # no second save
+
+
 def test_recovery_sources_and_upload(client, mc_data):
     (mc_data / "world" / "playerdata" / f"{UUID_A}.dat_old").write_bytes(_inventory_dat())
     src = client.get("/api/recovery/sources").json()["sources"]

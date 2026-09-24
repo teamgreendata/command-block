@@ -74,7 +74,7 @@ function fillList(ul, items, emptyText) {
 
 // ---------------------------------------------------------------- tabs
 
-const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'forge', 'biomes', 'recovery', 'settings', 'logs'];
+const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'forge', 'biomes', 'storage', 'recovery', 'settings', 'logs'];
 
 function showTab(name) {
   // #player/<name> is a virtual page: the per-player analytics view
@@ -88,6 +88,7 @@ function showTab(name) {
     b.classList.toggle('active', !player && b.dataset.tab === name);
   }
   if (player) renderPlayerDetail(player);
+  if (name === 'storage') refreshStorage(false); // scan lazily, first open only
 }
 
 for (const b of document.querySelectorAll('#tabs .tab')) {
@@ -656,6 +657,83 @@ $('#recap-save').addEventListener('click', async () => {
     flash('Recap settings saved.');
   } catch (e) { flash(e.message, true); }
 });
+
+// ---------------------------------------------------------------- storage scanner
+
+let storageContainers = null; // null = never fetched
+const DIM_SHORT = { overworld: 'overworld', the_nether: 'nether', the_end: 'end' };
+
+function containerMatches(c, q) {
+  if (!q) return true;
+  if (c.kind.toLowerCase().includes(q)) return true;
+  if ((c.name || '').toLowerCase().includes(q)) return true;
+  if (`${c.x} ${c.y} ${c.z}`.includes(q) || (DIM_SHORT[c.dim] || '').includes(q)) return true;
+  return Object.values(c.items).some(item =>
+    item.id.replace('minecraft:', '').replace(/_/g, ' ').includes(q)
+    || (item.custom_name || '').toLowerCase().includes(q));
+}
+
+function renderStorage() {
+  if (storageContainers === null) return;
+  const q = $('#st-search').value.trim().toLowerCase();
+  const shown = storageContainers.filter(c => containerMatches(c, q));
+  $('#st-count').textContent = q
+    ? `${shown.length} of ${storageContainers.length} containers`
+    : `${storageContainers.length} containers`;
+
+  // combined totals over the visible containers (nested shulker contents included)
+  const totals = {};
+  for (const c of shown) {
+    for (const [id, count] of Object.entries(c.totals)) totals[id] = (totals[id] || 0) + count;
+  }
+  const totalsWrap = $('#st-totals');
+  totalsWrap.replaceChildren();
+  const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) {
+    totalsWrap.appendChild(el('p', 'empty', q ? 'no items match' : 'no stored items found'));
+  }
+  for (const [id, count] of entries) {
+    const chip = el('span', 'st-chip');
+    const img = el('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.src = `/api/itemicon/${id.replace('minecraft:', '')}`;
+    img.addEventListener('error', () => img.remove(), { once: true });
+    chip.appendChild(img);
+    chip.appendChild(document.createTextNode(
+      `${id.replace('minecraft:', '').replace(/_/g, ' ')} ×${count.toLocaleString('en-US')}`));
+    totalsWrap.appendChild(chip);
+  }
+
+  const wrap = $('#st-containers');
+  wrap.replaceChildren();
+  for (const c of shown) {
+    const card = el('div', 'st-card');
+    const head = el('div', 'st-head');
+    head.appendChild(el('span', 'st-kind', c.name ? `“${c.name}”` : c.kind));
+    head.appendChild(el('span', 'st-where',
+      `${c.x} ${c.y} ${c.z} · ${DIM_SHORT[c.dim] || c.dim}${c.name ? ` · ${c.kind}` : ''}`));
+    card.appendChild(head);
+    card.appendChild(invGrid(c.items, [...Array(27).keys()], 9));
+    wrap.appendChild(card);
+  }
+}
+
+async function refreshStorage(force) {
+  if (storageContainers !== null && !force) { renderStorage(); return; }
+  $('#st-count').textContent = 'scanning world…';
+  try {
+    const s = await api('/api/storage');
+    storageContainers = s.containers;
+  } catch (e) {
+    $('#st-count').textContent = e.message;
+    return;
+  }
+  renderStorage();
+}
+
+$('#st-refresh').addEventListener('click', () => refreshStorage(true));
+$('#st-search').addEventListener('input', renderStorage);
 
 // ---------------------------------------------------------------- gear recovery
 

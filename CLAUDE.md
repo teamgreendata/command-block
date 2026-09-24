@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 82 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 87 tests, no network, no MC server
 node --test                                   # frontend builders + stat/detail/forge/biome data: 54 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -157,6 +157,18 @@ template (set empty to disable avatar fetching).
   RCON first — effectively live; RCON down falls back to last-saved. The frontend draws
   the in-game grid (enchanted slots tinted, MC-style hover tooltip, icons via the
   itemicon proxy).
+- **Storage tab** (`app/storage.py`): scans region files for placed containers
+  (chest/trapped_chest/barrel/shulker_box block entities; all shulker colors share one
+  be-id). ⚠️ Regions live under `world/dimensions/minecraft/<dim>/region` in this
+  generation (classic `world/region` is the overworld fallback). Block entities with a
+  `LootTable` key are UNTOUCHED world-gen loot chests — excluded, which is what makes
+  the list "player-placed" (a looted dungeon chest is indistinguishable; UI says so).
+  Per-region (mtime,size) cache so refreshes only re-parse changed regions; scan runs
+  in a thread; `fresh=1` saves first like the inventory viewer. The shared item-view
+  helpers (`item_view`, `_component_lines`…) moved here from main (main re-exports for
+  its inventory endpoint + tests). Chunk length field counts the compression byte —
+  slice `blob[5:4+length]`. Live-validated: chests placed over RCON on the throwaway
+  rig round-tripped exactly through the scanner.
 - **Gear recovery** (Recovery tab): `app/nbt.py` is a full NBT parser + SNBT writer —
   wrapper types (`Byte`/`Short`/`Long`/`Float`/arrays) preserve tag widths so item
   components round-trip verbatim into `give <player> <id>[components] <count>` strings
@@ -167,9 +179,10 @@ template (set empty to disable avatar fetching).
   on world files; gives go through `/api/command`. NBT gotcha that cost a bug: in
   `out[self.string()] = self.payload(tag)` Python evaluates the RIGHT side first —
   always read the name into a local before the payload.
-- UI structure: ten hash-routed tabs — **Dashboard** (Global commands across the top +
+- UI structure: eleven hash-routed tabs — **Dashboard** (Global commands across the top +
   a full-body card per whitelisted/online player), **Server Info** (status/facts +
-  world panel), **Console**, **Whitelist**, **Waypoints**, **Forge** (enchanted-item builder), **Biomes** (natural-item catalog with sprites + give), **Recovery** (gear
+  world panel), **Console**, **Whitelist**, **Waypoints**, **Forge** (enchanted-item builder), **Biomes** (natural-item catalog with sprites + give), **Storage** (all placed
+  containers + contents, searchable), **Recovery** (gear
   restoration from saves/backups), **Settings** (card-stat picker), **Logs** — plus the
   header's sky widget (status dot, in-game clock +
   weather-condition icon, day count). The card vs
