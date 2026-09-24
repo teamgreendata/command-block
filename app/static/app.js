@@ -74,11 +74,30 @@ function fillList(ul, items, emptyText) {
 
 // ---------------------------------------------------------------- tabs
 
-const TABS = ['dashboard', 'server', 'console', 'whitelist', 'waypoints', 'forge', 'biomes', 'storage', 'recovery', 'settings', 'logs'];
+const TABS = ['dashboard', 'waypoints', 'forge', 'biomes', 'storage', 'recovery', 'settings'];
+const SETTINGS_SECTIONS = ['server', 'console', 'whitelist', 'logs', 'dashboard'];
+// the old top-level tabs live inside Settings now — keep old links working
+const LEGACY_TABS = ['server', 'console', 'whitelist', 'logs'];
+
+function showSettingsSection(sec) {
+  if (!SETTINGS_SECTIONS.includes(sec)) sec = 'server';
+  for (const s of SETTINGS_SECTIONS) {
+    document.getElementById(`sec-${s}`).classList.toggle('active', s === sec);
+  }
+  for (const b of document.querySelectorAll('#settings-menu button')) {
+    b.classList.toggle('active', b.dataset.sec === sec);
+  }
+}
 
 function showTab(name) {
   // #player/<name> is a virtual page: the per-player analytics view
   const player = name.startsWith('player/') ? decodeURIComponent(name.slice(7)) : null;
+  if (LEGACY_TABS.includes(name)) {
+    location.hash = `settings/${name}`;
+    return;
+  }
+  const [tab, section] = name.split('/', 2);
+  name = tab;
   if (!player && !TABS.includes(name)) name = 'dashboard';
   for (const t of TABS) {
     document.getElementById(`page-${t}`).classList.toggle('active', !player && t === name);
@@ -89,6 +108,11 @@ function showTab(name) {
   }
   if (player) renderPlayerDetail(player);
   if (name === 'storage') refreshStorage(false); // scan lazily, first open only
+  if (name === 'settings') showSettingsSection(section || 'server'); // land on Server Info
+}
+
+for (const b of document.querySelectorAll('#settings-menu button')) {
+  b.addEventListener('click', () => { location.hash = `settings/${b.dataset.sec}`; });
 }
 
 for (const b of document.querySelectorAll('#tabs .tab')) {

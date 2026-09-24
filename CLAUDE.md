@@ -179,12 +179,16 @@ template (set empty to disable avatar fetching).
   on world files; gives go through `/api/command`. NBT gotcha that cost a bug: in
   `out[self.string()] = self.payload(tag)` Python evaluates the RIGHT side first —
   always read the name into a local before the payload.
-- UI structure: eleven hash-routed tabs — **Dashboard** (Global commands across the top +
-  a full-body card per whitelisted/online player), **Server Info** (status/facts +
-  world panel), **Console**, **Whitelist**, **Waypoints**, **Forge** (enchanted-item builder), **Biomes** (natural-item catalog with sprites + give), **Storage** (all placed
-  containers + contents, searchable), **Recovery** (gear
-  restoration from saves/backups), **Settings** (card-stat picker), **Logs** — plus the
-  header's sky widget (status dot, in-game clock +
+- UI structure: seven hash-routed top tabs — **Dashboard** (Global commands + a
+  full-body card per whitelisted/online player), **Waypoints**, **Forge**
+  (enchanted-item builder), **Biomes** (natural-item catalog with sprites + give),
+  **Storage** (all placed containers + contents, searchable), **Recovery** (gear
+  restoration from saves/backups), **Settings**. The Settings page is a shell with a
+  left section menu — sections `#settings/<sec>`: **Server Info** (the landing
+  section), **Console**, **Whitelist**, **Logs**, **Dashboard** (card-stat picker +
+  email recaps). Legacy hashes (#server/#console/#whitelist/#logs) redirect into the
+  shell; moved panels kept their element IDs so handlers/timers were untouched — keep
+  it that way when moving panels. Plus the header's sky widget (status dot, in-game clock +
   weather-condition icon, day count). The card vs
   global split is data-driven: each command in `quick-commands.js` carries
   `scope: 'player'|'global'`, and player commands name their `playerField`, which cards

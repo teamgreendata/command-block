@@ -125,11 +125,28 @@ main {
   grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
   gap: 1rem;
 }
-/* single-column tabs (dashboard panels are all full-width now) */
-#page-dashboard.active, #page-console.active, #page-whitelist.active,
-#page-waypoints.active, #page-forge.active, #page-biomes.active,
-#page-storage.active, #page-recovery.active, #page-settings.active,
-#page-logs.active { grid-template-columns: 1fr; }
+/* every page is single-column at the top level */
+.tab-page.active { grid-template-columns: 1fr; }
+
+/* Settings: left section menu + content */
+.settings-shell { display: grid; grid-template-columns: 11rem 1fr; gap: 1rem; align-items: start; }
+#settings-menu { display: flex; flex-direction: column; gap: 0.35rem; }
+#settings-menu button { text-align: left; }
+#settings-menu button.active {
+  background: var(--panel);
+  color: var(--ink);
+  text-shadow: none;
+  box-shadow: inset 2px 2px 0 var(--bevel-light), inset -2px -2px 0 #9c9c9c;
+}
+.settings-content { min-width: 0; }
+.settings-sec { display: none; }
+.settings-sec.active { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+#sec-server.active { grid-template-columns: 1fr 1fr; }
+@media (max-width: 750px) {
+  .settings-shell { grid-template-columns: 1fr; }
+  #settings-menu { flex-direction: row; flex-wrap: wrap; }
+  #sec-server.active { grid-template-columns: 1fr; }
+}
 @media (max-width: 750px) { .tab-page.active { grid-template-columns: 1fr; } }
 
 /* global commands: builder + broadcast side by side across the top */
