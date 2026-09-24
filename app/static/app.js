@@ -983,6 +983,58 @@ function playerCard(name, isOnline) {
   head.appendChild(id);
   card.appendChild(head);
 
+  // one-click quick actions (disabled with a reason rather than hidden)
+  const quick = el('div', 'pc-quick');
+  const torch = el('button', 'small', '64 torches');
+  torch.type = 'button';
+  if (!isOnline) {
+    torch.disabled = true;
+    torch.title = `${name} is offline`;
+  } else {
+    torch.addEventListener('click', () => {
+      sendRaw(`give ${name} minecraft:torch 64`);
+      flash(`Sent 64 torches to ${name}.`);
+    });
+  }
+  quick.appendChild(torch);
+
+  const mainStorage = waypoints.find(w => w.name.toLowerCase() === 'main storage');
+  const wpBtn = el('button', 'small', 'TP: Main Storage');
+  wpBtn.type = 'button';
+  if (!mainStorage) {
+    wpBtn.disabled = true;
+    wpBtn.title = 'save a waypoint named “Main Storage” on the Waypoints tab';
+  } else if (!isOnline) {
+    wpBtn.disabled = true;
+    wpBtn.title = `${name} is offline`;
+  } else {
+    wpBtn.addEventListener('click', () => {
+      sendRaw(buildWaypointTp(name, mainStorage));
+      flash(`Sent ${name} to Main Storage.`);
+    });
+  }
+  quick.appendChild(wpBtn);
+
+  const other = whitelistNames.find(n => n !== name);
+  if (other) {
+    const otherBtn = el('button', 'small', `TP → ${other}`);
+    otherBtn.type = 'button';
+    if (!isOnline) {
+      otherBtn.disabled = true;
+      otherBtn.title = `${name} is offline`;
+    } else if (!lastOnline.includes(other)) {
+      otherBtn.disabled = true;
+      otherBtn.title = `${other} is offline`;
+    } else {
+      otherBtn.addEventListener('click', () => {
+        sendRaw(`tp ${name} ${other}`);
+        flash(`Sent ${name} to ${other}.`);
+      });
+    }
+    quick.appendChild(otherBtn);
+  }
+  card.appendChild(quick);
+
   const form = document.createElement('form');
   form.autocomplete = 'off';
   form.className = 'pc-form';
