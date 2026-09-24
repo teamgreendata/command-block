@@ -520,9 +520,15 @@ h3.bio-biome { margin: 1rem 0 0.25rem; font-size: 0.9rem; color: var(--ink); }
   align-items: center;
   user-select: none;
 }
-.pc-mod { display: flex; gap: 0.4rem; margin-top: 0.15rem; }
-.pc-quick { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: auto; }
-.pc-form { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+.pc-quick {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+  margin-left: auto;
+  flex: none;
+}
+.pc-form { flex-direction: column; align-items: stretch; gap: 0.5rem; margin-top: auto; }
 .pc-form .quick-top select { flex: 1; }
 .pc-form .qf { flex: 1 1 6.5rem; }
 .pc-form .qf label { color: #2f2f2f; }

@@ -335,23 +335,7 @@ async function refreshWhitelist() {
   renderCards();
 }
 
-async function kick(name) {
-  if (!confirm(`Kick ${name}?`)) return;
-  try {
-    const r = await api('/api/kick', { name });
-    flash(stripCodes(r.raw) || `Kicked ${name}.`);
-  } catch (e) { flash(e.message, true); }
-  refreshPlayers();
-}
-
-async function ban(name) {
-  if (!confirm(`Ban ${name}? They stay banned until pardoned.`)) return;
-  try {
-    const r = await api('/api/ban', { name });
-    flash(stripCodes(r.raw) || `Banned ${name}.`);
-  } catch (e) { flash(e.message, true); }
-  refreshPlayers();
-}
+// kick/ban left the cards (the API endpoints remain; the console covers them)
 
 async function whitelistRemove(name) {
   try {
@@ -963,23 +947,6 @@ function playerCard(name, isOnline) {
   const stats = document.createElement('div');
   stats.className = 'pc-stats'; // rows filled by applyStats()
   id.appendChild(stats);
-
-  const mod = document.createElement('div');
-  mod.className = 'pc-mod';
-  const kickBtn = document.createElement('button');
-  kickBtn.type = 'button';
-  kickBtn.className = 'small';
-  kickBtn.textContent = 'kick';
-  kickBtn.disabled = !isOnline;
-  kickBtn.addEventListener('click', () => kick(name));
-  const banBtn = document.createElement('button');
-  banBtn.type = 'button';
-  banBtn.className = 'small danger';
-  banBtn.textContent = 'ban';
-  banBtn.addEventListener('click', () => ban(name));
-  mod.appendChild(kickBtn);
-  mod.appendChild(banBtn);
-  id.appendChild(mod);
   head.appendChild(id);
   card.appendChild(head);
 
@@ -1033,7 +1000,7 @@ function playerCard(name, isOnline) {
     }
     quick.appendChild(otherBtn);
   }
-  card.appendChild(quick);
+  head.appendChild(quick); // stacked column to the right of the stats
 
   const form = document.createElement('form');
   form.autocomplete = 'off';

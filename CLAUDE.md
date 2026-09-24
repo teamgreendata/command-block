@@ -194,9 +194,10 @@ template (set empty to disable avatar fetching).
   `scope: 'player'|'global'`, and player commands name their `playerField`, which cards
   auto-fill with the card's player and hide (`cardHide` drops extra fields, e.g. summon's
   coords). Add a new command there and the right UI renders it automatically. Cards also
-  carry one-click quick actions (64 torches · TP to the waypoint literally named
-  "Main Storage" · TP to the other whitelisted player) — buttons disable with a
-  title-reason when the player/waypoint isn't available.
+  carry one-click quick actions stacked to the right of the stats (64 torches · TP to
+  the waypoint literally named "Main Storage" · TP to the other whitelisted player) —
+  buttons disable with a title-reason when the player/waypoint isn't available. Kick/ban
+  have no card buttons (endpoints remain; use the console).
 - **Mobile is a supported first-class client** (the user drives this from phone/tablet).
   Hard-won layout rules: `.panel` carries `min-width: 0` — grid items otherwise refuse to
   shrink below content width and silently widen the page (`flex: 1`'s `0%` basis does NOT
