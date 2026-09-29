@@ -63,6 +63,7 @@
       <h2>World map
         <span class="h2-tools">
           <span id="map-coords" class="quick-desc"></span>
+          <label title="markers for structures someone has actually entered"><input type="checkbox" id="map-structures" checked> structures</label>
           <select id="map-dim">
             <option value="overworld">Overworld</option>
             <option value="the_nether">Nether (roof)</option>
@@ -74,7 +75,9 @@
         </span>
       </h2>
       <p class="quick-desc">Rendered from the world files — terrain updates when the server
-        saves (~5 min behind play). Player markers are live.</p>
+        saves (~5 min behind play). Player markers are live. Structure markers appear only
+        when someone actually sets foot inside a place (tracked since this feature deployed;
+        a few earlier finds are credited from advancements).</p>
       <div id="map-viewport">
         <div id="map-plane"></div>
         <div id="map-markers"></div>

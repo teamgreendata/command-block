@@ -791,6 +791,78 @@ def test_positions_endpoint(client, monkeypatch):
     assert client.get("/api/positions").json() == {"players": []}
 
 
+CHAMBER = {"key": "overworld:trial_chambers:0:0", "type": "trial_chambers",
+           "dim": "overworld", "x": 8, "z": 8,
+           "pieces": [[-20, -40, -20, 40, 5, 40]]}  # deep underground
+
+
+def test_discovery_requires_being_inside_not_above():
+    above = {"name": "RobGreen", "x": 10, "y": 60, "z": 10, "dim": "overworld"}
+    inside = {"name": "RobGreen", "x": 10, "y": 1, "z": 10, "dim": "overworld"}
+    wrong_dim = {"name": "RobGreen", "x": 10, "y": 1, "z": 10, "dim": "the_nether"}
+    # the user's exact scenario: same column at Y60 must NOT discover a Y1 chamber
+    assert not main._inside_structure(above, CHAMBER)
+    assert main._inside_structure(inside, CHAMBER)
+    assert not main._inside_structure(wrong_dim, CHAMBER)
+    edge = {"name": "x", "x": 44, "y": 1, "z": 10, "dim": "overworld"}
+    assert main._inside_structure(edge, CHAMBER)  # within the +4 margin
+    beyond = {"name": "x", "x": 45, "y": 1, "z": 10, "dim": "overworld"}
+    assert not main._inside_structure(beyond, CHAMBER)
+
+
+def test_record_discoveries_first_finder_wins(monkeypatch, tmp_path):
+    monkeypatch.setenv("CB_DATA", str(tmp_path))
+    inside = {"name": "Alex", "x": 10, "y": 1, "z": 10, "dim": "overworld"}
+    main._record_discoveries([inside], [CHAMBER])
+    later = {"name": "RobGreen", "x": 10, "y": 1, "z": 10, "dim": "overworld"}
+    main._record_discoveries([later], [CHAMBER])
+    found = json.loads((tmp_path / "discoveries.json").read_text())
+    assert found[CHAMBER["key"]]["by"] == "Alex"
+
+
+def test_backfill_only_when_unambiguous(client, mc_data, monkeypatch, tmp_path):
+    monkeypatch.setenv("CB_DATA", str(tmp_path))
+    adv_dir = mc_data / "world" / "advancements"
+    adv_dir.mkdir()
+    (adv_dir / f"{UUID_A}.json").write_text(json.dumps({
+        "minecraft:nether/find_fortress": {"done": True},
+        "minecraft:nether/find_bastion": {"done": True},
+    }))
+    fortress = {"key": "the_nether:fortress:1:1", "type": "fortress",
+                "dim": "the_nether", "x": 24, "z": 24, "pieces": []}
+    bastion_a = {"key": "the_nether:bastion_remnant:5:5", "type": "bastion_remnant",
+                 "dim": "the_nether", "x": 88, "z": 88, "pieces": []}
+    bastion_b = {"key": "the_nether:bastion_remnant:9:9", "type": "bastion_remnant",
+                 "dim": "the_nether", "x": 152, "z": 152, "pieces": []}
+    main._backfill_discoveries([fortress, bastion_a, bastion_b])
+    found = json.loads((tmp_path / "discoveries.json").read_text())
+    assert found[fortress["key"]]["backfilled"] is True   # single candidate: credited
+    assert not any("bastion" in k for k in found)          # two candidates: never guess
+
+
+def test_map_structures_endpoint_returns_discovered_only(client, mc_data,
+                                                         monkeypatch, tmp_path):
+    from app import storage as storage_mod
+    monkeypatch.setenv("CB_DATA", str(tmp_path))
+    storage_mod.scan_state.clear()
+    storage_mod.scan_state.update({"state": "ready", "generated_at": 1,
+                                   "containers": [],
+                                   "structures": [CHAMBER,
+                                                  {"key": "overworld:fortress:9:9",
+                                                   "type": "fortress", "dim": "overworld",
+                                                   "x": 152, "z": 152, "pieces": []}]})
+    (tmp_path / "discoveries.json").write_text(json.dumps({
+        CHAMBER["key"]: {"type": "trial_chambers", "dim": "overworld",
+                         "x": 8, "z": 8, "by": "RobGreen", "at": 123}}))
+    r = client.get("/api/map/structures?dim=overworld").json()
+    assert r["state"] == "ready"
+    assert [s["type"] for s in r["structures"]] == ["trial_chambers"]  # fortress hidden
+    assert client.get("/api/map/structures?dim=the_end").json()["structures"] == []
+    assert client.get("/api/map/structures?dim=moon").status_code == 400
+    storage_mod.scan_state.clear()
+    storage_mod.scan_state["state"] = "idle"
+
+
 def test_storage_endpoint_fresh_semantics(client, mc_data, rcon_calls):
     import time as _time
     from app import storage as storage_mod

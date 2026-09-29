@@ -120,13 +120,13 @@ def test_scan_caches_by_mtime(world, monkeypatch):
     b.write_bytes(region_file(chunk_nbt(0, 32, block_entity(
         "minecraft:chest", 2, 64, 512, items=[stack(0, "minecraft:sand", 2)]))))
     calls = []
-    real = storage._containers_in_region
+    real = storage._scan_region
 
     def counting(path, dim):
         calls.append(path.name)
         return real(path, dim)
 
-    monkeypatch.setattr(storage, "_containers_in_region", counting)
+    monkeypatch.setattr(storage, "_scan_region", counting)
     assert len(storage.scan_containers(world)) == 2
     assert sorted(calls) == ["r.0.0.mca", "r.0.1.mca"]
     assert len(storage.scan_containers(world)) == 2
@@ -178,11 +178,11 @@ def test_run_scan_joins_instead_of_duplicating(world, monkeypatch):
     def slow(path, dim):
         started.set()
         release.wait(timeout=5)
-        return []
+        return [], []
 
     (_region_dir(world, "overworld") / "r.0.0.mca").write_bytes(
         region_file(chunk_nbt(0, 0)))
-    monkeypatch.setattr(storage, "_containers_in_region", slow)
+    monkeypatch.setattr(storage, "_scan_region", slow)
     t = threading.Thread(target=storage.run_scan, args=(world,))
     t.start()
     started.wait(timeout=5)
@@ -191,3 +191,46 @@ def test_run_scan_joins_instead_of_duplicating(world, monkeypatch):
     release.set()
     t.join(timeout=5)
     assert storage.scan_state["state"] == "ready"
+
+
+def structure_start(sid, cx, cz, bbs, invalid=False):
+    children = t_list(10, *(
+        t_compound(named(11, "BB",
+                         len(bb).to_bytes(4, "big")
+                         + b"".join(v.to_bytes(4, "big", signed=True) for v in bb)))
+        for bb in bbs))
+    return named(10, sid, t_compound(
+        named(8, "id", t_string("INVALID" if invalid else sid)),
+        named(3, "ChunkX", t_int(cx)),
+        named(3, "ChunkZ", t_int(cz)),
+        named(9, "Children", children)))
+
+
+def chunk_with_structures(x, z, *starts):
+    raw = named(10, "", t_compound(
+        named(3, "xPos", t_int(x)),
+        named(3, "zPos", t_int(z)),
+        named(9, "block_entities", t_list(10)),
+        named(10, "structures", t_compound(
+            named(10, "starts", t_compound(*starts)))),
+    ))
+    return zlib.compress(raw)
+
+
+def test_scan_collects_structures(world):
+    (_region_dir(world, "overworld") / "r.0.0.mca").write_bytes(region_file(
+        chunk_with_structures(
+            15, 12,
+            structure_start("minecraft:village_plains", 15, 12, [[240, 60, 190, 260, 80, 210]]),
+            structure_start("minecraft:trial_chambers", 15, 12, [[200, -40, 150, 250, 10, 200]]),
+            structure_start("minecraft:nether_fossil", 15, 12, [[0, 0, 0, 4, 4, 4]]),
+            structure_start("minecraft:mineshaft", 15, 12, [[0, 0, 0, 9, 9, 9]], invalid=True),
+        )))
+    _, structures = storage.scan_world(world)
+    by_type = {s["type"]: s for s in structures}
+    assert set(by_type) == {"village", "trial_chambers"}  # fossil + INVALID dropped
+    village = by_type["village"]
+    assert village["key"] == "overworld:village:15:12"
+    assert (village["x"], village["z"]) == (15 * 16 + 8, 12 * 16 + 8)
+    assert village["pieces"] == [[240, 60, 190, 260, 80, 210]]
+    assert storage.scan_containers(world) == []  # container product unaffected

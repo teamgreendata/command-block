@@ -40,7 +40,7 @@ async def _lifespan(app: FastAPI):
     tasks = []
     if not _env("RECAP_DISABLED"):
         tasks.append(asyncio.create_task(_recap_loop()))
-        tasks.append(asyncio.create_task(_fishing_loop()))
+        tasks.append(asyncio.create_task(_sampler_loop()))
     yield
     for task in tasks:
         task.cancel()
@@ -881,13 +881,31 @@ def _fishing_tick(previous: dict | None) -> dict:
     return current
 
 
-async def _fishing_loop():
+async def _sampler_loop():
+    """The 30s heartbeat: fishing attribution + structure-discovery checks.
+    Structure checks need the region scan's structure list — kick the
+    background scan once, then use whatever it publishes."""
+    global _backfilled_for
     previous = None
     while True:
         try:
             previous = await asyncio.to_thread(_fishing_tick, previous)
+            state = storage.scan_state.get("state", "idle")
+            if state == "idle":
+                asyncio.get_running_loop().run_in_executor(
+                    None, storage.run_scan, _data_dir())
+            elif state == "ready":
+                structures = storage.scan_state.get("structures", [])
+                generated = storage.scan_state.get("generated_at")
+                if generated and generated != _backfilled_for:
+                    await asyncio.to_thread(_backfill_discoveries, structures)
+                    _backfilled_for = generated
+                player_positions = await _live_positions()
+                if player_positions:
+                    await asyncio.to_thread(
+                        _record_discoveries, player_positions, structures)
         except Exception as exc:
-            print(f"[fishing] loop error: {exc}", flush=True)
+            print(f"[sampler] loop error: {exc}", flush=True)
         await asyncio.sleep(FISHING_INTERVAL)
 
 
@@ -1142,14 +1160,12 @@ async def map_tile(dim: str, rx: int, rz: int):
 _DIM_NAME_RE = re.compile(r'"(minecraft:[a-z_]+)"')
 
 
-@app.get("/api/positions")
-async def positions():
-    """Live position of every online player — the map's realtime layer."""
+async def _live_positions() -> list:
     out = []
     try:
         names = parse_list(await rcon_command("list"))["players"]
     except RconError:
-        return {"players": []}
+        return []
     for name in names:
         if not _NAME_RE.match(name):
             continue
@@ -1167,7 +1183,123 @@ async def positions():
                         .removeprefix("minecraft:")})
         except RconError:
             break
-    return {"players": out}
+    return out
+
+
+@app.get("/api/positions")
+async def positions():
+    """Live position of every online player — the map's realtime layer."""
+    return {"players": await _live_positions()}
+
+
+# ---------------------------------------------------------------- discoveries
+
+# A structure is "discovered" only when a player's tracked position lands
+# inside one of its pieces' 3D bounding boxes (+margin) — standing at Y60 over
+# a chamber at Y1 reveals nothing. Tracking starts at deploy; a small
+# advancement backfill credits unambiguous past finds.
+_DISCOVERY_MARGIN = 4
+_BACKFILL_ADVANCEMENTS = {
+    "minecraft:nether/find_fortress": "fortress",
+    "minecraft:nether/find_bastion": "bastion_remnant",
+    "minecraft:adventure/minecraft_trials_edition": "trial_chambers",
+    "minecraft:story/follow_ender_eye": "stronghold",
+}
+_backfilled_for: int | None = None
+
+
+def _discoveries_path() -> Path:
+    return Path(_env("CB_DATA", "/cb-data")) / "discoveries.json"
+
+
+def _inside_structure(pos: dict, structure: dict, margin: int = _DISCOVERY_MARGIN) -> bool:
+    if pos["dim"] != structure["dim"]:
+        return False
+    for x0, y0, z0, x1, y1, z1 in structure.get("pieces", []):
+        if (x0 - margin <= pos["x"] <= x1 + margin
+                and y0 - margin <= pos["y"] <= y1 + margin
+                and z0 - margin <= pos["z"] <= z1 + margin):
+            return True
+    return False
+
+
+def _record_discoveries(player_positions: list, structures: list) -> None:
+    if not player_positions or not structures:
+        return
+    found = recap._read_json(_discoveries_path(), {})
+    changed = False
+    for structure in structures:
+        if structure["key"] in found:
+            continue
+        for pos in player_positions:
+            if _inside_structure(pos, structure):
+                found[structure["key"]] = {
+                    "type": structure["type"], "dim": structure["dim"],
+                    "x": structure["x"], "z": structure["z"],
+                    "by": pos["name"], "at": int(time.time())}
+                changed = True
+                break
+    if changed:
+        recap._write_json(_discoveries_path(), found)
+
+
+def _advancement_done(adv: dict, key: str) -> bool:
+    entry = adv.get(key)
+    return bool(entry) and bool(entry.get("done"))
+
+
+def _backfill_discoveries(structures: list) -> None:
+    """Credit past finds where an entry advancement leaves no ambiguity."""
+    data = _data_dir()
+    world = _world_root(data)
+    if world is None:
+        return
+    adv_dir = world / "players" / "advancements"
+    if not adv_dir.is_dir():
+        adv_dir = world / "advancements"  # classic layout
+    found = recap._read_json(_discoveries_path(), {})
+    changed = False
+    by_type: dict[str, list] = {}
+    for s in structures:
+        by_type.setdefault(s["type"], []).append(s)
+    for name, uuid in (_name_uuid_pairs(data) or []):
+        try:
+            adv = json.loads((adv_dir / f"{uuid}.json").read_text())
+        except (OSError, ValueError):
+            continue
+        for adv_key, s_type in _BACKFILL_ADVANCEMENTS.items():
+            candidates = by_type.get(s_type, [])
+            if len(candidates) != 1 or candidates[0]["key"] in found:
+                continue  # ambiguous or already found: never guess
+            if _advancement_done(adv, adv_key):
+                s = candidates[0]
+                found[s["key"]] = {"type": s["type"], "dim": s["dim"], "x": s["x"],
+                                   "z": s["z"], "by": name, "at": None,
+                                   "backfilled": True}
+                changed = True
+    if changed:
+        recap._write_json(_discoveries_path(), found)
+
+
+@app.get("/api/map/structures")
+async def map_structures(dim: str = "overworld"):
+    if dim not in _MAP_DIMS:
+        return _bad_request("Unknown dimension.")
+    state = storage.scan_state.get("state", "idle")
+    if state == "idle":
+        asyncio.get_running_loop().run_in_executor(None, storage.run_scan, _data_dir())
+        await asyncio.sleep(0.1)
+        state = storage.scan_state.get("state", "scanning")
+    if state != "ready":
+        return {"state": state,
+                "regions_done": storage.scan_state.get("regions_done", 0),
+                "regions_total": storage.scan_state.get("regions_total", 0),
+                "structures": []}
+    found = recap._read_json(_discoveries_path(), {})
+    known = {s["key"] for s in storage.scan_state.get("structures", [])}
+    out = [dict(entry, key=key) for key, entry in found.items()
+           if entry.get("dim") == dim and (key in known or not known)]
+    return {"state": "ready", "structures": out}
 
 
 @app.get("/api/storage")

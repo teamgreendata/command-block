@@ -393,8 +393,46 @@ const mapState = {
   centered: false,
   tiles: new Set(),
   players: [],
+  structures: [],
   timer: null,
 };
+
+// discovered-structure pin styling: [color, label shown on the map?]
+const STRUCTURE_STYLES = {
+  village: ['#b08d55', true],
+  trial_chambers: ['#c15f38', true],
+  fortress: ['#8f3838', true],
+  bastion_remnant: ['#5c5c66', true],
+  stronghold: ['#a56fd8', true],
+  monument: ['#55ffff', true],
+  ancient_city: ['#1d3340', true],
+  mansion: ['#7a3b2e', true],
+  pillager_outpost: ['#9b7b4d', true],
+  ruined_portal: ['#8a4ec9', false],
+  shipwreck: ['#4a72b0', false],
+  buried_treasure: ['#ffaa00', false],
+  mineshaft: ['#8b8b8b', false],
+  desert_pyramid: ['#e6d9a0', true],
+  jungle_temple: ['#4c7c3c', true],
+  igloo: ['#dfe9f0', false],
+  swamp_hut: ['#3c5c3c', false],
+};
+
+function structureLabel(type) {
+  return type.replace(/_/g, ' ').replace(/\b[a-z]/g, c => c.toUpperCase());
+}
+
+async function loadMapStructures(retries = 40) {
+  try {
+    const r = await api(`/api/map/structures?dim=${mapState.dim}`);
+    if (r.state === 'scanning' && retries > 0 && mapState.active) {
+      setTimeout(() => loadMapStructures(retries - 1), 1500);
+      return;
+    }
+    mapState.structures = r.structures || [];
+    renderMapMarkers();
+  } catch { /* markers just stay absent */ }
+}
 
 function mapViewport() { return $('#map-viewport'); }
 
@@ -442,6 +480,22 @@ async function loadMapTiles() {
 function renderMapMarkers() {
   const wrap = $('#map-markers');
   wrap.replaceChildren();
+  if ($('#map-structures').checked) {
+    for (const s of mapState.structures) {
+      const [color, labeled] = STRUCTURE_STYLES[s.type] || ['#e8e8e8', false];
+      const [sx, sz] = worldToScreen(s.x, s.z);
+      const pin = el('div', 'map-structure');
+      pin.style.left = `${sx}px`;
+      pin.style.top = `${sz}px`;
+      pin.title = `${structureLabel(s.type)} · ${s.x} ${s.z}`
+        + (s.by ? ` · found by ${s.by}` : '');
+      const dot = el('span', 'map-structure-dot');
+      dot.style.background = color;
+      pin.appendChild(dot);
+      if (labeled) pin.appendChild(el('span', 'map-label', structureLabel(s.type)));
+      wrap.appendChild(pin);
+    }
+  }
   for (const w of waypoints) {
     // all dim names normalize to overworld / the_nether / the_end
     if ((w.dim || 'minecraft:overworld').replace('minecraft:', '') !== mapState.dim) continue;
@@ -490,6 +544,7 @@ function setMapActive(active) {
   if (active && !mapState.active) {
     mapState.active = true;
     loadMapTiles();
+    loadMapStructures();
     pollPositions();
     mapState.timer = setInterval(pollPositions, 3000);
   } else if (!active && mapState.active) {
@@ -548,8 +603,14 @@ function zoomMap(factor, atX, atZ) {
   $('#map-dim').addEventListener('change', () => {
     mapState.dim = $('#map-dim').value;
     loadMapTiles();
+    loadMapStructures();
   });
-  $('#map-refresh').addEventListener('click', () => { loadMapTiles(); pollPositions(); });
+  $('#map-structures').addEventListener('change', renderMapMarkers);
+  $('#map-refresh').addEventListener('click', () => {
+    loadMapTiles();
+    loadMapStructures();
+    pollPositions();
+  });
   window.addEventListener('resize', () => { if (mapState.active) applyMapTransform(); });
 }
 

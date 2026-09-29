@@ -187,6 +187,21 @@ main {
   background: var(--gold);
   border: 2px solid #000;
 }
+.map-structure {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: auto; /* hover titles work */
+}
+.map-structure-dot {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #000;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
 #map-dim { padding: 0.2rem 0.4rem; font-size: 0.78rem; }
 
 /* per-command cards under Settings › Server Info */

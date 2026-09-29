@@ -157,9 +157,39 @@ def _add_totals(totals: dict, item: dict) -> None:
                 _add_totals(totals, inner)
 
 
-def _containers_in_region(path: Path, dim: str) -> list:
+# Structure families we mark; nether_fossil is decorative noise.
+_STRUCTURE_SKIP = {"nether_fossil"}
+_MAX_PIECES = 256
+
+
+def _structure_records(chunk: dict, dim: str) -> list:
+    out = []
+    starts = chunk.get("structures", {})
+    starts = starts.get("starts", {}) if isinstance(starts, dict) else {}
+    for sid, data in starts.items():
+        if not isinstance(data, dict) or str(data.get("id", "INVALID")) == "INVALID":
+            continue
+        bare = str(sid).split(":")[-1]
+        if bare in _STRUCTURE_SKIP:
+            continue
+        if bare.startswith("village_"):
+            bare = "village"
+        cx = int(data.get("ChunkX", chunk.get("xPos", 0)))
+        cz = int(data.get("ChunkZ", chunk.get("zPos", 0)))
+        pieces = []
+        for child in data.get("Children", [])[:_MAX_PIECES]:
+            bb = child.get("BB") if isinstance(child, dict) else None
+            if bb is not None and len(bb) == 6:
+                pieces.append([int(v) for v in bb])
+        out.append({"key": f"{dim}:{bare}:{cx}:{cz}", "type": bare, "dim": dim,
+                    "x": cx * 16 + 8, "z": cz * 16 + 8, "pieces": pieces})
+    return out
+
+
+def _scan_region(path: Path, dim: str) -> tuple[list, list]:
     raw = path.read_bytes()
     out = []
+    structures = []
     for i in range(1024):
         entry = int.from_bytes(raw[i * 4:i * 4 + 4], "big")
         offset, sectors = entry >> 8, entry & 0xFF
@@ -173,6 +203,7 @@ def _containers_in_region(path: Path, dim: str) -> list:
             chunk = nbt.parse(blob[5:4 + length])
         except Exception:
             continue
+        structures.extend(_structure_records(chunk, dim))
         for be in chunk.get("block_entities", []):
             if not isinstance(be, dict) or str(be.get("id")) not in CONTAINER_IDS:
                 continue
@@ -189,7 +220,7 @@ def _containers_in_region(path: Path, dim: str) -> list:
             out.append({"dim": dim, "x": be.get("x"), "y": be.get("y"), "z": be.get("z"),
                         "kind": CONTAINER_IDS[str(be["id"])], "name": name or None,
                         "items": items, "totals": totals})
-    return out
+    return out, structures
 
 
 def _find_world(data_dir: Path) -> Path | None:
@@ -221,17 +252,19 @@ scan_state: dict = {"state": "idle"}
 _scan_lock = threading.Lock()
 
 
-def scan_containers(data_dir: Path) -> list:
-    """Synchronous full scan (kept for direct use + as the job body)."""
+def scan_world(data_dir: Path) -> tuple[list, list]:
+    """Synchronous full scan -> (containers, structures)."""
     world = _find_world(data_dir)
     diagnostics = {"world": str(world) if world else None,
                    "regions": 0, "containers": 0, "chunk_errors": 0}
     scan_state["diagnostics"] = diagnostics
     if world is None:
-        return []
+        return [], []
     files = _region_files(world)
     scan_state["regions_total"] = len(files)
     containers: list = []
+    structures: list = []
+    seen_structures: set = set()
     for done, (path, dim) in enumerate(files):
         scan_state["regions_done"] = done
         try:
@@ -242,20 +275,28 @@ def scan_containers(data_dir: Path) -> list:
         key = str(path)
         hit = _cache.get(key)
         if hit and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
-            found = hit[2]
+            found, found_structures = hit[2], hit[3]
         else:
             try:
-                found = _containers_in_region(path, dim)
+                found, found_structures = _scan_region(path, dim)
             except OSError:
                 diagnostics["chunk_errors"] += 1
                 continue
-            _cache[key] = (st.st_mtime_ns, st.st_size, found)
+            _cache[key] = (st.st_mtime_ns, st.st_size, found, found_structures)
         containers.extend(found)
+        for s in found_structures:
+            if s["key"] not in seen_structures:  # starts are origin-unique anyway
+                seen_structures.add(s["key"])
+                structures.append(s)
     diagnostics["containers"] = len(containers)
     scan_state["regions_done"] = len(files)
     order = {d: i for i, d in enumerate(_DIMS)}
     containers.sort(key=lambda c: (order[c["dim"]], c["x"] or 0, c["z"] or 0, c["y"] or 0))
-    return containers
+    return containers, structures
+
+
+def scan_containers(data_dir: Path) -> list:
+    return scan_world(data_dir)[0]
 
 
 def run_scan(data_dir: Path) -> None:
@@ -265,8 +306,9 @@ def run_scan(data_dir: Path) -> None:
     try:
         scan_state.update({"state": "scanning", "regions_done": 0,
                            "regions_total": 0, "error": None})
-        containers = scan_containers(data_dir)
+        containers, structures = scan_world(data_dir)
         scan_state.update({"state": "ready", "containers": containers,
+                           "structures": structures,
                            "generated_at": int(time.time())})
     except Exception as exc:
         scan_state.update({"state": "error", "error": str(exc)})

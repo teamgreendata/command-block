@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 100 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 105 tests, no network, no MC server
 node --test                                   # frontend builders + stat/detail/forge/biome data: 54 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -171,7 +171,15 @@ template (set empty to disable avatar fetching).
   Terrain lags play by up to ~5 min (regions write on save) — the UI says so. Player
   markers are live: `/api/positions` (RCON list + Pos/Dimension per player) polled
   every 3s only while the Map tab is open; waypoints render as pins. Pan/zoom is
-  hand-rolled (no external libs — CSP). Nether view shows the roof (v1 caveat).
+  hand-rolled (no external libs — CSP). Nether view shows the roof (v1 caveat). **Structure markers are
+  discovered-only by construction**: the region scan also harvests
+  `structures.starts` (id + ChunkX/ChunkZ + Children[].BB piece boxes; INVALID +
+  nether_fossil skipped, village_* grouped), and a structure renders only once a
+  SAMPLED PLAYER POSITION fell inside a piece box +4 (the 30s `_sampler_loop`, which
+  also does fishing attribution) → `cb_data/discoveries.json`, first finder credited.
+  Standing at Y60 above a Y1 chamber reveals nothing — that exact scenario is a test.
+  Advancement backfill credits find_fortress/find_bastion/trials/follow_ender_eye
+  ONLY when exactly one candidate of the type exists (never guess).
   Block palettes pack at ≥4 bits non-spanning; heightmaps 9 bits; y = yPos*16 + hm - 1.
 - **Storage tab** (`app/storage.py`): scans region files for placed containers
   (chest/trapped_chest/barrel/shulker_box block entities; all shulker colors share one

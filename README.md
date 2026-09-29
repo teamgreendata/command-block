@@ -1,7 +1,9 @@
 # command-block
 
 A small self-hosted admin dashboard for the Minecraft server stack — a live world
-map rendered from the region files with realtime player markers, live status
+map rendered from the region files with realtime player markers and
+discovered-only structure markers (no seed spoilers — places appear when you
+actually set foot in them), live status
 with an in-game clock/weather widget, a Server Info tab (day count, uptime, world
 size, seed, MSPT, distances…), a card per player with their full-body skin render
 and a configurable stat list (last seen, hours played, deaths, kills, nemesis,
