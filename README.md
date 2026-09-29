@@ -1,6 +1,7 @@
 # command-block
 
-A small self-hosted admin dashboard for the Minecraft server stack — live status
+A small self-hosted admin dashboard for the Minecraft server stack — a live world
+map rendered from the region files with realtime player markers, live status
 with an in-game clock/weather widget, a Server Info tab (day count, uptime, world
 size, seed, MSPT, distances…), a card per player with their full-body skin render
 and a configurable stat list (last seen, hours played, deaths, kills, nemesis,
@@ -17,7 +18,7 @@ day/night/clear-weather one-click presets,
 saved teleport waypoints (grab a player's live position, name it, teleport
 anyone there later — across dimensions), a browser RCON console, whitelist
 management, automated daily/weekly email recaps (fun stat digests with server
-awards, via your own SMTP), log tail, and a graceful restart button, across seven tabs (server info, console,
+awards, via your own SMTP), log tail, and a graceful restart button, across eight tabs (server info, console,
 whitelist and logs live inside Settings). FastAPI + vanilla JS, one container, deliberately
 **no Docker socket**: the entire admin surface is RCON plus a read-only log mount.
 

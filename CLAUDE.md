@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 87 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 94 tests, no network, no MC server
 node --test                                   # frontend builders + stat/detail/forge/biome data: 54 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -157,6 +157,15 @@ template (set empty to disable avatar fetching).
   RCON first — effectively live; RCON down falls back to last-saved. The frontend draws
   the in-game grid (enchanted slots tinted, MC-style hover tooltip, icons via the
   itemicon proxy).
+- **World map** (`app/mapper.py` + Map tab): tiles render per region (512×512, 1px per
+  block) from the WORLD_SURFACE heightmap + section block_states palettes, shaded by
+  height (water by OCEAN_FLOOR depth); ~1s/region, cached on disk in
+  `CB_DATA/maptiles/<dim>/` with tile-mtime == region-mtime as the freshness contract.
+  Terrain lags play by up to ~5 min (regions write on save) — the UI says so. Player
+  markers are live: `/api/positions` (RCON list + Pos/Dimension per player) polled
+  every 3s only while the Map tab is open; waypoints render as pins. Pan/zoom is
+  hand-rolled (no external libs — CSP). Nether view shows the roof (v1 caveat).
+  Block palettes pack at ≥4 bits non-spanning; heightmaps 9 bits; y = yPos*16 + hm - 1.
 - **Storage tab** (`app/storage.py`): scans region files for placed containers
   (chest/trapped_chest/barrel/shulker_box block entities; all shulker colors share one
   be-id). ⚠️ Regions live under `world/dimensions/minecraft/<dim>/region` in this
@@ -179,10 +188,10 @@ template (set empty to disable avatar fetching).
   on world files; gives go through `/api/command`. NBT gotcha that cost a bug: in
   `out[self.string()] = self.payload(tag)` Python evaluates the RIGHT side first —
   always read the name into a local before the payload.
-- UI structure: seven hash-routed top tabs — **Dashboard** (three benign presets
+- UI structure: eight hash-routed top tabs — **Dashboard** (three benign presets
   Day/Night/Clear-weather + keep-inventory badges + broadcast + a full-body card per
   whitelisted/online player; the global command builder lives under Settings › Server
-  Info now), **Waypoints**, **Forge**
+  Info now), **Map** (world map + live players), **Waypoints**, **Forge**
   (enchanted-item builder), **Biomes** (natural-item catalog with sprites + give),
   **Storage** (all placed containers + contents, searchable), **Recovery** (gear
   restoration from saves/backups), **Settings**. The Settings page is a shell with a

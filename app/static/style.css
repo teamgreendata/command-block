@@ -149,6 +149,46 @@ main {
 }
 @media (max-width: 750px) { .tab-page.active { grid-template-columns: 1fr; } }
 
+/* world map */
+#map-viewport {
+  position: relative;
+  overflow: hidden;
+  height: 70vh;
+  min-height: 320px;
+  background: #0b0b12;
+  border: 2px solid #555;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+#map-viewport:active { cursor: grabbing; }
+#map-plane { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.map-tile { position: absolute; width: 512px; height: 512px; image-rendering: pixelated; }
+#map-markers { position: absolute; inset: 0; pointer-events: none; }
+.map-player, .map-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.map-player img { width: 20px; height: 20px; image-rendering: pixelated; border: 2px solid #000; }
+.map-label {
+  font-size: 0.65rem;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 0 0.25rem;
+  white-space: nowrap;
+}
+.map-pin-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--gold);
+  border: 2px solid #000;
+}
+#map-dim { padding: 0.2rem 0.4rem; font-size: 0.78rem; }
+
 /* per-command cards under Settings › Server Info */
 .cmd-card { min-height: 0; }
 .cmd-card form { flex-direction: column; align-items: stretch; gap: 0.6rem; }
@@ -625,4 +665,6 @@ a.pc-name:hover { text-decoration: underline; }
   #forge-item { max-width: 100%; flex: 1 1 100%; }
   :root { --slot: 34px; } /* 9 columns must fit a phone */
   .inv-slot img { width: 26px; height: 26px; }
+  .panel h2 { flex-wrap: wrap; gap: 0.3rem; }
+  .h2-tools { flex-wrap: wrap; justify-content: flex-end; }
 }

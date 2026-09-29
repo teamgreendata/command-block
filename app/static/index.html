@@ -22,6 +22,7 @@
 
 <nav id="tabs">
   <button type="button" class="tab" data-tab="dashboard">Dashboard</button>
+  <button type="button" class="tab" data-tab="map">Map</button>
   <button type="button" class="tab" data-tab="waypoints">Waypoints</button>
   <button type="button" class="tab" data-tab="forge">Forge</button>
   <button type="button" class="tab" data-tab="biomes">Biomes</button>
@@ -55,6 +56,30 @@
       <div id="player-cards" class="player-cards"></div>
     </section>
 
+  </section>
+
+  <section class="tab-page" id="page-map">
+    <section class="panel" id="map-panel">
+      <h2>World map
+        <span class="h2-tools">
+          <span id="map-coords" class="quick-desc"></span>
+          <select id="map-dim">
+            <option value="overworld">Overworld</option>
+            <option value="the_nether">Nether (roof)</option>
+            <option value="the_end">End</option>
+          </select>
+          <button id="map-zoom-out" type="button" class="small">−</button>
+          <button id="map-zoom-in" type="button" class="small">+</button>
+          <button id="map-refresh" type="button">refresh</button>
+        </span>
+      </h2>
+      <p class="quick-desc">Rendered from the world files — terrain updates when the server
+        saves (~5 min behind play). Player markers are live.</p>
+      <div id="map-viewport">
+        <div id="map-plane"></div>
+        <div id="map-markers"></div>
+      </div>
+    </section>
   </section>
 
   <section class="tab-page" id="page-waypoints">

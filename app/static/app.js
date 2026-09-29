@@ -73,7 +73,7 @@ function fillList(ul, items, emptyText) {
 
 // ---------------------------------------------------------------- tabs
 
-const TABS = ['dashboard', 'waypoints', 'forge', 'biomes', 'storage', 'recovery', 'settings'];
+const TABS = ['dashboard', 'map', 'waypoints', 'forge', 'biomes', 'storage', 'recovery', 'settings'];
 const SETTINGS_SECTIONS = ['server', 'console', 'whitelist', 'logs', 'dashboard'];
 // the old top-level tabs live inside Settings now — keep old links working
 const LEGACY_TABS = ['server', 'console', 'whitelist', 'logs'];
@@ -108,6 +108,7 @@ function showTab(name) {
   if (player) renderPlayerDetail(player);
   if (name === 'storage') refreshStorage(false); // scan lazily, first open only
   if (name === 'settings') showSettingsSection(section || 'server'); // land on Server Info
+  setMapActive(name === 'map'); // live position polling only while the map is open
 }
 
 for (const b of document.querySelectorAll('#settings-menu button')) {
@@ -377,6 +378,180 @@ $('#broadcast-form').addEventListener('submit', async e => {
     $('#broadcast-msg').value = '';
   } catch (err) { flash(err.message, true); }
 });
+
+// ---------------------------------------------------------------- world map
+
+// Hand-rolled pan/zoom: tile <img>s live on #map-plane in world coordinates
+// (1px = 1 block); the plane gets translate+scale; markers are positioned in
+// viewport space so they keep their size at any zoom.
+const mapState = {
+  active: false,
+  dim: 'overworld',
+  scale: 2,
+  centerX: 0,   // world block coords at the viewport center
+  centerZ: 0,
+  centered: false,
+  tiles: new Set(),
+  players: [],
+  timer: null,
+};
+
+function mapViewport() { return $('#map-viewport'); }
+
+function worldToScreen(x, z) {
+  const vp = mapViewport().getBoundingClientRect();
+  return [vp.width / 2 + (x - mapState.centerX) * mapState.scale,
+          vp.height / 2 + (z - mapState.centerZ) * mapState.scale];
+}
+
+function screenToWorld(sx, sz) {
+  const vp = mapViewport().getBoundingClientRect();
+  return [mapState.centerX + (sx - vp.width / 2) / mapState.scale,
+          mapState.centerZ + (sz - vp.height / 2) / mapState.scale];
+}
+
+function applyMapTransform() {
+  const vp = mapViewport().getBoundingClientRect();
+  const tx = vp.width / 2 - mapState.centerX * mapState.scale;
+  const tz = vp.height / 2 - mapState.centerZ * mapState.scale;
+  $('#map-plane').style.transform =
+    `translate(${tx}px, ${tz}px) scale(${mapState.scale})`;
+  renderMapMarkers();
+}
+
+async function loadMapTiles() {
+  try {
+    const idx = await api(`/api/map/index?dim=${mapState.dim}`);
+    const plane = $('#map-plane');
+    plane.replaceChildren();
+    mapState.tiles.clear();
+    for (const t of idx.tiles) {
+      const img = el('img', 'map-tile');
+      img.loading = 'lazy';
+      img.draggable = false;
+      img.src = `/api/map/tile/${mapState.dim}/${t.rx}/${t.rz}`;
+      img.style.left = `${t.rx * 512}px`;
+      img.style.top = `${t.rz * 512}px`;
+      plane.appendChild(img);
+      mapState.tiles.add(`${t.rx},${t.rz}`);
+    }
+    applyMapTransform();
+  } catch (e) { flash(e.message, true); }
+}
+
+function renderMapMarkers() {
+  const wrap = $('#map-markers');
+  wrap.replaceChildren();
+  for (const w of waypoints) {
+    // all dim names normalize to overworld / the_nether / the_end
+    if ((w.dim || 'minecraft:overworld').replace('minecraft:', '') !== mapState.dim) continue;
+    const [x, , z] = w.pos.split(' ').map(Number);
+    const [sx, sz] = worldToScreen(x, z);
+    const pin = el('div', 'map-pin');
+    pin.style.left = `${sx}px`;
+    pin.style.top = `${sz}px`;
+    pin.appendChild(el('span', 'map-pin-dot'));
+    pin.appendChild(el('span', 'map-label', w.name));
+    wrap.appendChild(pin);
+  }
+  for (const p of mapState.players) {
+    if (p.dim !== mapState.dim) continue;
+    const [sx, sz] = worldToScreen(p.x, p.z);
+    const mk = el('div', 'map-player');
+    mk.style.left = `${sx}px`;
+    mk.style.top = `${sz}px`;
+    const img = el('img');
+    img.src = `/api/avatar/${p.name}`;
+    img.alt = '';
+    mk.appendChild(img);
+    mk.appendChild(el('span', 'map-label', p.name));
+    wrap.appendChild(mk);
+  }
+}
+
+async function pollPositions() {
+  try {
+    const r = await api('/api/positions');
+    mapState.players = r.players;
+    if (!mapState.centered && r.players.length) {
+      const me = r.players[0];
+      mapState.dim = me.dim;
+      $('#map-dim').value = mapState.dim;
+      mapState.centerX = me.x;
+      mapState.centerZ = me.z;
+      mapState.centered = true;
+      loadMapTiles();
+    }
+    renderMapMarkers();
+  } catch { /* keep last markers */ }
+}
+
+function setMapActive(active) {
+  if (active && !mapState.active) {
+    mapState.active = true;
+    loadMapTiles();
+    pollPositions();
+    mapState.timer = setInterval(pollPositions, 3000);
+  } else if (!active && mapState.active) {
+    mapState.active = false;
+    clearInterval(mapState.timer);
+  }
+}
+
+function zoomMap(factor, atX, atZ) {
+  const next = Math.max(0.15, Math.min(8, mapState.scale * factor));
+  if (atX !== undefined) {
+    // keep the point under the cursor fixed
+    const [wx, wz] = screenToWorld(atX, atZ);
+    mapState.centerX = wx - (atX - mapViewport().getBoundingClientRect().width / 2) / next;
+    mapState.centerZ = wz - (atZ - mapViewport().getBoundingClientRect().height / 2) / next;
+  }
+  mapState.scale = next;
+  applyMapTransform();
+}
+
+{
+  const vp = $('#map-viewport');
+  let dragging = null;
+  vp.addEventListener('pointerdown', e => {
+    dragging = { x: e.clientX, y: e.clientY,
+                 cx: mapState.centerX, cz: mapState.centerZ, moved: false };
+    vp.setPointerCapture(e.pointerId);
+  });
+  vp.addEventListener('pointermove', e => {
+    if (!dragging) {
+      const r = vp.getBoundingClientRect();
+      const [wx, wz] = screenToWorld(e.clientX - r.left, e.clientY - r.top);
+      $('#map-coords').textContent = `${Math.round(wx)}, ${Math.round(wz)}`;
+      return;
+    }
+    dragging.moved = true;
+    mapState.centerX = dragging.cx - (e.clientX - dragging.x) / mapState.scale;
+    mapState.centerZ = dragging.cz - (e.clientY - dragging.y) / mapState.scale;
+    applyMapTransform();
+  });
+  vp.addEventListener('pointerup', e => {
+    if (dragging && !dragging.moved) {
+      const r = vp.getBoundingClientRect();
+      const [wx, wz] = screenToWorld(e.clientX - r.left, e.clientY - r.top);
+      $('#map-coords').textContent = `${Math.round(wx)}, ${Math.round(wz)} (clicked)`;
+    }
+    dragging = null;
+  });
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = vp.getBoundingClientRect();
+    zoomMap(e.deltaY < 0 ? 1.25 : 0.8, e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+  $('#map-zoom-in').addEventListener('click', () => zoomMap(1.25));
+  $('#map-zoom-out').addEventListener('click', () => zoomMap(0.8));
+  $('#map-dim').addEventListener('change', () => {
+    mapState.dim = $('#map-dim').value;
+    loadMapTiles();
+  });
+  $('#map-refresh').addEventListener('click', () => { loadMapTiles(); pollPositions(); });
+  window.addEventListener('resize', () => { if (mapState.active) applyMapTransform(); });
+}
 
 // ---------------------------------------------------------------- waypoints
 

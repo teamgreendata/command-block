@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 
-from app import nbt, rcon, recap, storage
+from app import mapper, nbt, rcon, recap, storage
 from app.rcon import RconError
 
 PING_PORT = 25565  # server-list ping; RCON port comes from the env
@@ -1004,6 +1004,82 @@ async def itemicon(item_id: str):
 # item -> tooltip-view rendering is shared with the container scanner
 _component_lines = storage._component_lines  # kept addressable for tests
 _item_view = storage.item_view
+
+
+# ---------------------------------------------------------------- world map
+
+_MAP_DIMS = {"overworld", "the_nether", "the_end"}
+_REGION_NAME_RE = re.compile(r"^r\.(-?\d+)\.(-?\d+)$")
+
+
+def _region_dir_for(dim: str) -> Path | None:
+    world = _world_root(_data_dir())
+    if world is None:
+        return None
+    region_dir = world / "dimensions" / "minecraft" / dim / "region"
+    if not region_dir.is_dir() and dim == "overworld":
+        region_dir = world / "region"
+    return region_dir if region_dir.is_dir() else None
+
+
+@app.get("/api/map/index")
+async def map_index(dim: str = "overworld"):
+    if dim not in _MAP_DIMS:
+        return _bad_request("Unknown dimension.")
+    region_dir = _region_dir_for(dim)
+    tiles = []
+    if region_dir is not None:
+        for p in sorted(region_dir.glob("*.mca")):
+            m = _REGION_NAME_RE.match(p.stem)
+            if m and p.stat().st_size >= 8192:
+                tiles.append({"rx": int(m.group(1)), "rz": int(m.group(2))})
+    return {"dim": dim, "tiles": tiles}
+
+
+@app.get("/api/map/tile/{dim}/{rx}/{rz}")
+async def map_tile(dim: str, rx: int, rz: int):
+    if dim not in _MAP_DIMS:
+        return _bad_request("Unknown dimension.")
+    region_dir = _region_dir_for(dim)
+    if region_dir is None:
+        return JSONResponse(status_code=404, content={"error": "No region data."})
+    src = region_dir / f"r.{rx}.{rz}.mca"
+    if not src.is_file():
+        return JSONResponse(status_code=404, content={"error": "No such region."})
+    cache_dir = Path(_env("CB_DATA", "/cb-data")) / "maptiles" / dim
+    tile = await asyncio.to_thread(mapper.tile_for, src, cache_dir)
+    return Response(content=tile.read_bytes(), media_type="image/png")
+
+
+_DIM_NAME_RE = re.compile(r'"(minecraft:[a-z_]+)"')
+
+
+@app.get("/api/positions")
+async def positions():
+    """Live position of every online player — the map's realtime layer."""
+    out = []
+    try:
+        names = parse_list(await rcon_command("list"))["players"]
+    except RconError:
+        return {"players": []}
+    for name in names:
+        if not _NAME_RE.match(name):
+            continue
+        try:
+            raw = strip_colors(await rcon_command(f"data get entity {name} Pos"))
+            m = _POS_DATA_RE.search(raw)
+            if not m:
+                continue
+            x, y, z = (float(g) for g in m.groups())
+            dim_raw = strip_colors(await rcon_command(f"data get entity {name} Dimension"))
+            dm = _DIM_NAME_RE.search(dim_raw)
+            out.append({"name": name, "x": round(x, 1), "y": round(y, 1),
+                        "z": round(z, 1),
+                        "dim": (dm.group(1) if dm else "minecraft:overworld")
+                        .removeprefix("minecraft:")})
+        except RconError:
+            break
+    return {"players": out}
 
 
 @app.get("/api/storage")

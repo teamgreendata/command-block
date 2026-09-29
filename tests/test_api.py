@@ -699,6 +699,45 @@ def test_inventory_fresh_zero_and_rcon_down(client, mc_data, rcon_calls, monkeyp
     assert client.get("/api/inventory/nobody").status_code == 404
 
 
+def test_map_index_and_tile(client, mc_data, monkeypatch, tmp_path):
+    from tests.test_mapper import make_chunk
+    from tests.test_storage import region_file
+    monkeypatch.setenv("CB_DATA", str(tmp_path / "cb"))
+    region_dir = mc_data / "world" / "dimensions" / "minecraft" / "overworld" / "region"
+    region_dir.mkdir(parents=True)
+    (region_dir / "r.0.0.mca").write_bytes(region_file(make_chunk(0, 0)))
+    idx = client.get("/api/map/index?dim=overworld").json()
+    assert idx["tiles"] == [{"rx": 0, "rz": 0}]
+    r = client.get("/api/map/tile/overworld/0/0")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/png"
+    assert r.content[:8] == b"\x89PNG\r\n\x1a\n"
+    assert client.get("/api/map/tile/overworld/9/9").status_code == 404
+    assert client.get("/api/map/index?dim=moon").status_code == 400
+
+
+def test_positions_endpoint(client, monkeypatch):
+    async def fake(command, *, expect_disconnect=False):
+        if command == "list":
+            return "There are 2 of a max of 20 players online: RobGreen, Alex"
+        if command.endswith("Pos"):
+            return "X has the following entity data: [186.61d, 63.0d, -14.36d]"
+        return 'X has the following entity data: "minecraft:the_nether"'
+
+    monkeypatch.setattr(main, "rcon_command", fake)
+    r = client.get("/api/positions").json()
+    assert r["players"] == [
+        {"name": "RobGreen", "x": 186.6, "y": 63.0, "z": -14.4, "dim": "the_nether"},
+        {"name": "Alex", "x": 186.6, "y": 63.0, "z": -14.4, "dim": "the_nether"},
+    ]
+
+    async def down(command, *, expect_disconnect=False):
+        raise RconError("down")
+
+    monkeypatch.setattr(main, "rcon_command", down)
+    assert client.get("/api/positions").json() == {"players": []}
+
+
 def test_storage_endpoint_fresh_semantics(client, mc_data, rcon_calls):
     from app import storage as storage_mod
     storage_mod._cache.clear()
