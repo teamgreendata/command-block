@@ -1231,7 +1231,7 @@ function playerCard(name, isOnline) {
   quick.appendChild(torch);
 
   const mainStorage = waypoints.find(w => w.name.toLowerCase() === 'main storage');
-  const wpBtn = el('button', 'small', 'TP: Main Storage');
+  const wpBtn = el('button', 'small', 'TP → Main Storage');
   wpBtn.type = 'button';
   if (!mainStorage) {
     wpBtn.disabled = true;

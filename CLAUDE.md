@@ -240,8 +240,16 @@ template (set empty to disable avatar fetching).
   emulation zooms out and HIDES overflow — measure `scrollWidth` against the device width
   in a plain viewport (see the scratchpad sweep pattern: every tab must fit 390px).
 - The UI is Minecraft-GUI themed by design (`style.css`): inventory-gray beveled panels,
-  stone buttons, black edit boxes, MC chat colors (`#55FF55`/`#FF5555`/`#FFAA00`) — stay
-  in that visual language for new UI.
+  stone buttons, black edit boxes, MC chat colors — stay in that visual language.
+  **Design tokens are law**: 5-step type scale (`--fs-xs…--fs-xl`), 4-step spacing
+  (`--sp-1…--sp-4`), and the named gray ladder in `:root` — never introduce ad-hoc
+  font sizes, gaps, or grays. Contrast rules: `--dim` on panel, `--ink-dark` for small
+  text on slot gray, `--warn-dark`/`--green-dark` for status on gray surfaces (bright
+  chat colors are for DARK surfaces only — `#ff5555` on `#8b8b8b` is a 1.35:1 fail).
+  White names sit on rgba-black nameplate chips (like in-game nameplates), never bare
+  on gray. Specificity gotcha: `.panel h2` (0,1,1) beats a single class — style h2
+  variants as `h2.foo`. Bar-table tracks are muted `--slot-dark`, never black, so the
+  data stays the figure.
 - **RCON has no executor** (no position, no "self") — that's why the quick panel makes
   clear/kill/gamemode targets required and summon goes through
   `execute at <player> run summon … ~ ~ ~` or explicit coords.
