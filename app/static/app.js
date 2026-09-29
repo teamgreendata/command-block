@@ -1388,6 +1388,33 @@ async function renderPlayerDetail(name) {
   wrap.appendChild(detailPanel(`Interactions — ${numFmt(interactions.total)}`,
     barTable(interactions, 'bar-white', 'no interactions yet')));
 
+  // fishing: lifetime totals from vanilla + our per-item catch tracking
+  const fish = d.fishing || {};
+  const fishPanel = detailPanel(`Fishing — ${numFmt(fish.lifetime_catches)} caught`);
+  const fishTiles = el('div', 'tile-row');
+  fishTiles.appendChild(statTile('lifetime catches', numFmt(fish.lifetime_catches)));
+  fishTiles.appendChild(statTile('rod casts', numFmt(fish.casts)));
+  fishPanel.appendChild(fishTiles);
+  const caughtIds = Object.entries(fish.items || {}).sort((a, b) => b[1] - a[1]);
+  if (caughtIds.length) {
+    fishPanel.appendChild(el('h3', null,
+      `What the line brought in — ${numFmt(fish.tracked_catches)} tracked`));
+    const max = caughtIds[0][1];
+    const rows = caughtIds.map(([id, count]) => ({
+      id, label: id.replace('minecraft:', '').replace(/_/g, ' ')
+        .replace(/\b[a-z]/g, c => c.toUpperCase()),
+      count, text: numFmt(count), pct: Math.max(2, Math.round(count / max * 100)),
+    }));
+    fishPanel.appendChild(barTable({ rows, more: 0 }, 'bar-blue', ''));
+  }
+  fishPanel.appendChild(el('p', 'quick-desc', fish.since
+    ? `item breakdown tracked since ${fish.since} — the game only records totals, so `
+      + 'earlier catches can’t be itemized. Same-window pickups of look-alike items '
+      + 'can miscount slightly.'
+    : 'item breakdown starts with the next catch — the game only records totals, '
+      + 'so past catches can’t be itemized.'));
+  wrap.appendChild(fishPanel);
+
   const leftover = leftoverCustom(custom);
   if (leftover.length) {
     wrap.appendChild(detailPanel('Everything else', plainRows({ rows: leftover, more: 0 }, '')));

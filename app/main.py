@@ -37,9 +37,12 @@ MAX_LOG_LINES = 500
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    task = asyncio.create_task(_recap_loop()) if not _env("RECAP_DISABLED") else None
+    tasks = []
+    if not _env("RECAP_DISABLED"):
+        tasks.append(asyncio.create_task(_recap_loop()))
+        tasks.append(asyncio.create_task(_fishing_loop()))
     yield
-    if task:
+    for task in tasks:
         task.cancel()
 
 
@@ -561,6 +564,15 @@ async def playerdetail(name: str):
         health = _nbt_float(raw, b"Health")
         out["health"] = round(health, 1) if health is not None else None
         out["food"] = _nbt_int(raw, b"foodLevel")
+    custom = out["sections"].get("minecraft:custom", {})
+    tracked = recap._read_json(_fishing_state_path(), {}).get(canonical, {})
+    out["fishing"] = {
+        "lifetime_catches": custom.get("minecraft:fish_caught", 0),
+        "casts": out["sections"].get("minecraft:used", {}).get("minecraft:fishing_rod", 0),
+        "since": tracked.get("since"),
+        "tracked_catches": tracked.get("catches", 0),
+        "items": tracked.get("items", {}),
+    }
     return out
 
 
@@ -801,6 +813,82 @@ async def serverinfo():
         out["world_size_mb"] = round(size / 1e6, 1)
     out["day"] = _read_day(data)
     return out
+
+
+# ---------------------------------------------------------------- fishing tracker
+
+# Vanilla records only a TOTAL fish_caught counter — never which items were
+# reeled in. This tracker samples stats every 30s and, in any window where a
+# player's fish_caught rose, attributes that window's pickups of fishable
+# items as catches. Near-exact while fishing; can miscount if the same item
+# types arrive from other sources in the same half-minute (the UI says so).
+FISHABLE = {f"minecraft:{i}" for i in (
+    "cod", "salmon", "tropical_fish", "pufferfish",                       # fish
+    "bow", "enchanted_book", "fishing_rod", "name_tag", "nautilus_shell",  # treasure
+    "saddle",
+    "lily_pad", "leather_boots", "leather", "bone", "string", "potion",    # junk
+    "bowl", "stick", "ink_sac", "tripwire_hook", "rotten_flesh", "bamboo",
+)}
+FISHING_INTERVAL = int(_env("FISHING_INTERVAL", "30"))
+
+
+def _attribute_catches(prev_sections: dict, cur_sections: dict) -> dict | None:
+    """One sampling window for one player -> {"catches": n, "items": {...}}
+    or None when no catch happened (pickups alone attribute nothing)."""
+    prev_custom = prev_sections.get("minecraft:custom", {})
+    cur_custom = cur_sections.get("minecraft:custom", {})
+    catches = (cur_custom.get("minecraft:fish_caught", 0)
+               - prev_custom.get("minecraft:fish_caught", 0))
+    if catches <= 0:
+        return None
+    prev_up = prev_sections.get("minecraft:picked_up", {})
+    cur_up = cur_sections.get("minecraft:picked_up", {})
+    items = {}
+    for item_id in FISHABLE:
+        delta = cur_up.get(item_id, 0) - prev_up.get(item_id, 0)
+        if delta > 0:
+            items[item_id] = delta
+    return {"catches": catches, "items": items}
+
+
+def _fishing_state_path() -> Path:
+    return Path(_env("CB_DATA", "/cb-data")) / "fishing.json"
+
+
+def _fishing_tick(previous: dict | None) -> dict:
+    """Sample all players; fold any catches into fishing.json. Returns the
+    sample to carry into the next tick."""
+    current = {name: entry.get("sections", {})
+               for name, entry in _collect_all_sections().items()}
+    if previous is None:
+        return current
+    changed = False
+    state = recap._read_json(_fishing_state_path(), {})
+    for name, cur in current.items():
+        if name not in previous:
+            continue
+        window = _attribute_catches(previous[name], cur)
+        if window is None:
+            continue
+        entry = state.setdefault(name, {"since": date.today().isoformat(),
+                                        "catches": 0, "items": {}})
+        entry["catches"] += window["catches"]
+        for item_id, count in window["items"].items():
+            entry["items"][item_id] = entry["items"].get(item_id, 0) + count
+        changed = True
+    if changed:
+        recap._write_json(_fishing_state_path(), state)
+    return current
+
+
+async def _fishing_loop():
+    previous = None
+    while True:
+        try:
+            previous = await asyncio.to_thread(_fishing_tick, previous)
+        except Exception as exc:
+            print(f"[fishing] loop error: {exc}", flush=True)
+        await asyncio.sleep(FISHING_INTERVAL)
 
 
 # ---------------------------------------------------------------- email recaps

@@ -491,6 +491,59 @@ def test_playerdetail_returns_raw_sections(client, mc_data):
     assert isinstance(d["last_seen"], int)
 
 
+def test_attribute_catches_gated_on_fish_counter():
+    prev = {"minecraft:custom": {"minecraft:fish_caught": 10},
+            "minecraft:picked_up": {"minecraft:cod": 5, "minecraft:string": 2}}
+    # pickups without a catch: nothing attributed (string from a spider, say)
+    cur_no_catch = {"minecraft:custom": {"minecraft:fish_caught": 10},
+                    "minecraft:picked_up": {"minecraft:cod": 9, "minecraft:string": 6}}
+    assert main._attribute_catches(prev, cur_no_catch) is None
+    # catches: fishable pickup deltas attributed, non-fishable ignored
+    cur = {"minecraft:custom": {"minecraft:fish_caught": 13},
+           "minecraft:picked_up": {"minecraft:cod": 7, "minecraft:string": 2,
+                                   "minecraft:enchanted_book": 1, "minecraft:dirt": 40}}
+    got = main._attribute_catches(prev, cur)
+    assert got == {"catches": 3, "items": {"minecraft:cod": 2,
+                                           "minecraft:enchanted_book": 1}}
+
+
+def test_fishing_tick_accumulates_state(client, mc_data, monkeypatch, tmp_path):
+    monkeypatch.setenv("CB_DATA", str(tmp_path))
+
+    def stats_with(caught, cod):
+        return {"alice": {"sections": {
+            "minecraft:custom": {"minecraft:fish_caught": caught},
+            "minecraft:picked_up": {"minecraft:cod": cod},
+        }, "xp_level": 1}}
+
+    monkeypatch.setattr(main, "_collect_all_sections", lambda: stats_with(5, 3))
+    prev = main._fishing_tick(None)          # first sample: baseline only
+    assert not (tmp_path / "fishing.json").exists()
+    monkeypatch.setattr(main, "_collect_all_sections", lambda: stats_with(7, 5))
+    prev = main._fishing_tick(prev)          # two catches, two cod
+    monkeypatch.setattr(main, "_collect_all_sections", lambda: stats_with(8, 6))
+    main._fishing_tick(prev)                 # one more
+    state = json.loads((tmp_path / "fishing.json").read_text())
+    assert state["alice"]["catches"] == 3
+    assert state["alice"]["items"] == {"minecraft:cod": 3}
+    assert state["alice"]["since"]
+
+
+def test_playerdetail_includes_fishing(client, mc_data, monkeypatch, tmp_path):
+    monkeypatch.setenv("CB_DATA", str(tmp_path))
+    (tmp_path / "fishing.json").write_text(json.dumps({"alice": {
+        "since": "2026-09-20", "catches": 41,
+        "items": {"minecraft:cod": 30, "minecraft:enchanted_book": 2}}}))
+    (mc_data / "world" / "stats" / f"{UUID_A}.json").write_text(json.dumps({"stats": {
+        "minecraft:custom": {"minecraft:fish_caught": 120},
+        "minecraft:used": {"minecraft:fishing_rod": 500},
+    }}))
+    fishing = client.get("/api/playerdetail/alice").json()["fishing"]
+    assert fishing == {"lifetime_catches": 120, "casts": 500, "since": "2026-09-20",
+                       "tracked_catches": 41,
+                       "items": {"minecraft:cod": 30, "minecraft:enchanted_book": 2}}
+
+
 def test_playerdetail_unknown_and_invalid_names(client, mc_data):
     assert client.get("/api/playerdetail/nobody").status_code == 404
     assert client.get("/api/playerdetail/bad%20name").status_code == 400

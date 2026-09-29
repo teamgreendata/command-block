@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 94 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 97 tests, no network, no MC server
 node --test                                   # frontend builders + stat/detail/forge/biome data: 54 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -125,6 +125,13 @@ template (set empty to disable avatar fetching).
   curated keys), and an auto-formatted "everything else" long tail. Bar charts are
   single-hue per panel (MC chat colors, values always visible as text) — keep it that
   way; don't mix hues within one bar table.
+- **Fishing tracker**: vanilla records only a TOTAL fish_caught counter — per-item
+  catch history does not exist and cannot be reconstructed. `_fishing_loop` (30s,
+  `FISHING_INTERVAL` env, same RECAP_DISABLED gate) samples stats and, in windows
+  where fish_caught rose, attributes that window's FISHABLE pickups as catches →
+  `cb_data/fishing.json`. Near-exact; same-window look-alike pickups can miscount
+  (UI says so). Surfaces on the player detail page's Fishing panel via
+  `/api/playerdetail`.
 - **Email recaps** (`app/recap.py`, wired in main): an asyncio loop (started via
   FastAPI lifespan; `RECAP_DISABLED=1` skips it — tests) snapshots every player's raw
   stat sections daily after `RECAP_HOUR` (default 07:00 container-local; set `TZ`),

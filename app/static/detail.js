@@ -93,6 +93,7 @@ const TICK_KEYS = /(^|_)(time|one_minute)($|_)|_since_/;
 const COVERED = new Set([
   'minecraft:deaths', 'minecraft:play_time', 'minecraft:play_one_minute',
   'minecraft:mob_kills', 'minecraft:player_kills',
+  'minecraft:fish_caught', // the Fishing panel owns it
 ]);
 
 export function fmtCustomValue(key, v) {

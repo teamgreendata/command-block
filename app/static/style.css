@@ -608,6 +608,7 @@ h3.bio-biome { margin: 1rem 0 0.25rem; font-size: 0.9rem; color: var(--ink); }
 .bar-cyan { background: #55ffff; }
 .bar-green { background: var(--green); }
 .bar-white { background: #e8e8e8; }
+.bar-blue { background: #5599ff; }
 .bt-value { font-size: 0.78rem; text-align: right; color: var(--ink); }
 .bt-more { grid-column: 1 / -1; font-size: 0.72rem; margin: 0.15rem 0 0; }
 .kv-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.25rem 1.4rem; }
