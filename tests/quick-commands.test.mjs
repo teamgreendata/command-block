@@ -104,9 +104,12 @@ test('scopes split 9 player / 4 global, with valid card wiring', () => {
   assert.equal(counts.global, 4);
 });
 
-test('presets are well-formed and kill-all is confirm-gated', () => {
-  for (const p of PRESETS) assert.ok(p.label && (p.command || p.commands), p.label);
-  assert.ok(PRESETS.find(p => p.command === 'kill @e[type=!player]').confirm);
+test('presets are exactly the three benign one-clicks', () => {
+  assert.deepEqual(PRESETS.map(p => [p.label, p.command]), [
+    ['Day', 'time set day'],
+    ['Night', 'time set night'],
+    ['Clear weather', 'weather clear'],
+  ]);
 });
 
 test('gamerules cover every dimension (rules are per-dimension now)', () => {
@@ -119,8 +122,4 @@ test('gamerules cover every dimension (rules are per-dimension now)', () => {
     ['execute in minecraft:the_nether run gamerule pvp false']);
   assert.deepEqual(gameruleCommands({ rule: 'pvp', value: '', dim: 'overworld' }),
     ['gamerule pvp']); // blank value queries
-  // the keep-inventory preset must hit all three dimensions
-  const preset = PRESETS.find(p => p.label === 'Keep inventory ON');
-  assert.deepEqual(preset.commands,
-    gameruleCommands({ rule: 'keep_inventory', value: 'true', dim: 'all' }));
 });

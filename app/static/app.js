@@ -7,7 +7,6 @@ import { BIOME_ITEMS, buildBiomeGive } from './biomes.js';
 const $ = s => document.querySelector(s);
 const stripCodes = s => String(s).replace(/§./g, '');
 
-const GLOBAL_COMMANDS = QUICK_COMMANDS.filter(c => c.scope === 'global');
 // Card action order: the common stuff first, destructive last.
 const CARD_ORDER = ['tp', 'give', 'effect', 'gamemode', 'experience', 'msg', 'summon', 'clear', 'kill'];
 const CARD_COMMANDS = CARD_ORDER.map(findCommand).filter(Boolean);
@@ -1576,34 +1575,28 @@ function collectValues(wrap) {
   return values;
 }
 
-// ---------------------------------------------------------------- global panel
+// ---------------------------------------------------------------- global command cards
 
-const quickSelect = $('#quick-cmd');
-for (const c of GLOBAL_COMMANDS) {
-  const o = document.createElement('option');
-  o.value = c.name;
-  o.textContent = c.label;
-  quickSelect.appendChild(o);
-}
-
-function renderGlobalFields(cmd) {
-  renderFields($('#quick-fields'), cmd);
-  $('#quick-desc').textContent = cmd.desc;
-}
-
-quickSelect.addEventListener('change', () => renderGlobalFields(findCommand(quickSelect.value)));
-
-$('#quick-form').addEventListener('submit', async e => {
-  e.preventDefault();
-  const cmd = findCommand(quickSelect.value);
-  const built = buildQuick(cmd, collectValues($('#quick-fields')));
-  if (built.error) { flash(built.error, true); return; }
-  if (cmd.buildMany) {
-    for (const command of cmd.buildMany(built.args)) await sendRaw(command);
-  } else {
-    sendRaw(built.command, cmd.confirm ? cmd.confirm(built.args) : null);
+// One card per global command, under Settings › Server Info.
+function initGlobalCards() {
+  for (const card of document.querySelectorAll('.cmd-card')) {
+    const cmd = findCommand(card.dataset.cmd);
+    const fields = card.querySelector('.quick-fields');
+    card.querySelector('.quick-desc').textContent = cmd.desc;
+    renderFields(fields, cmd);
+    card.querySelector('form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const built = buildQuick(cmd, collectValues(fields));
+      if (built.error) { flash(built.error, true); return; }
+      if (cmd.buildMany) {
+        for (const command of cmd.buildMany(built.args)) await sendRaw(command);
+      } else {
+        sendRaw(built.command, cmd.confirm ? cmd.confirm(built.args) : null);
+      }
+      flash(`Sent ${cmd.label.toLowerCase()} — response is in the Console.`);
+    });
   }
-});
+}
 
 for (const p of PRESETS) {
   const b = document.createElement('button');
@@ -1643,7 +1636,7 @@ $('#logs-auto').addEventListener('change', e => {
 showTab(location.hash.slice(1));
 updatePlayerDatalist([]);
 updateGrabSelect([]);
-renderGlobalFields(GLOBAL_COMMANDS[0]);
+initGlobalCards();
 renderCards();
 refreshSettings();
 refreshWaypoints();

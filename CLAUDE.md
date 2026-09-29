@@ -179,13 +179,17 @@ template (set empty to disable avatar fetching).
   on world files; gives go through `/api/command`. NBT gotcha that cost a bug: in
   `out[self.string()] = self.payload(tag)` Python evaluates the RIGHT side first —
   always read the name into a local before the payload.
-- UI structure: seven hash-routed top tabs — **Dashboard** (Global commands + a
-  full-body card per whitelisted/online player), **Waypoints**, **Forge**
+- UI structure: seven hash-routed top tabs — **Dashboard** (three benign presets
+  Day/Night/Clear-weather + keep-inventory badges + broadcast + a full-body card per
+  whitelisted/online player; the global command builder lives under Settings › Server
+  Info now), **Waypoints**, **Forge**
   (enchanted-item builder), **Biomes** (natural-item catalog with sprites + give),
   **Storage** (all placed containers + contents, searchable), **Recovery** (gear
   restoration from saves/backups), **Settings**. The Settings page is a shell with a
   left section menu — sections `#settings/<sec>`: **Server Info** (the landing
-  section), **Console**, **Whitelist**, **Logs**, **Dashboard** (card-stat picker +
+  section — status/world panels plus one card per global command: Set time, Weather,
+  Game rule, Difficulty, wired by `initGlobalCards()` from the same `scope:'global'`
+  specs), **Console**, **Whitelist**, **Logs**, **Dashboard** (card-stat picker +
   email recaps). Legacy hashes (#server/#console/#whitelist/#logs) redirect into the
   shell; moved panels kept their element IDs so handlers/timers were untouched — keep
   it that way when moving panels. Plus the header's sky widget (status dot, in-game clock +

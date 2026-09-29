@@ -290,19 +290,12 @@ export const QUICK_COMMANDS = [
   },
 ];
 
+// Kill-all-mobs and keep-inventory presets were deliberately retired — both
+// are considered acts now, done through the command cards in Settings.
 export const PRESETS = [
   { label: 'Day', command: 'time set day' },
   { label: 'Night', command: 'time set night' },
   { label: 'Clear weather', command: 'weather clear' },
-  { label: 'Kill all mobs', command: 'kill @e[type=!player]', confirm: 'Kill every non-player entity? (mobs, but also dropped items, armor stands…)' },
-  // deliberately no "keep inventory OFF" preset — turning it off is a
-  // considered act, done via the Game rule builder, not a one-click button.
-  // ON covers every dimension (rules are per-dimension in this generation).
-  { label: 'Keep inventory ON', commands: [
-    'gamerule keep_inventory true',
-    'execute in minecraft:the_nether run gamerule keep_inventory true',
-    'execute in minecraft:the_end run gamerule keep_inventory true',
-  ] },
 ];
 
 export function findCommand(name) {

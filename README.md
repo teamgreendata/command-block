@@ -12,7 +12,8 @@ recovery tab (read any playerdata save or backup .dat and re-give the items,
 enchantments included), an item forge (build enchanted gear from dropdowns), a biome catalog (natural + mob-dropped items with sprites, one-click give), a
 searchable storage scanner (every placed chest/barrel/shulker and its contents), plus the player-targeted commands right on the card
 (teleport, give, effect, gamemode, XP, message, summon, clear, kill, kick, ban),
-global commands with one-click presets (time, weather, game rules, difficulty),
+global command cards (time, weather, per-dimension game rules, difficulty) with
+day/night/clear-weather one-click presets,
 saved teleport waypoints (grab a player's live position, name it, teleport
 anyone there later — across dimensions), a browser RCON console, whitelist
 management, automated daily/weekly email recaps (fun stat digests with server

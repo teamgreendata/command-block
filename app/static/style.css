@@ -149,11 +149,10 @@ main {
 }
 @media (max-width: 750px) { .tab-page.active { grid-template-columns: 1fr; } }
 
-/* global commands: builder + broadcast side by side across the top */
-.g-cols { display: grid; grid-template-columns: 2fr 1fr; gap: 1.2rem; align-items: start; }
-.g-cols > * { min-width: 0; }
-.g-broadcast h3 { margin-top: 0; }
-@media (max-width: 750px) { .g-cols { grid-template-columns: 1fr; } }
+/* per-command cards under Settings › Server Info */
+.cmd-card { min-height: 0; }
+.cmd-card form { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+.cmd-card form button { align-self: flex-start; }
 
 /* Inventory-window panel: black outline, light top-left bevel, dark bottom-right */
 .panel {

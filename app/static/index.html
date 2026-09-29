@@ -43,23 +43,11 @@
         <span class="ki-badge" data-dim="nether">Nether <b>–</b></span>
         <span class="ki-badge" data-dim="end">End <b>–</b></span>
       </div>
-      <div class="g-cols">
-        <form id="quick-form" autocomplete="off">
-          <div class="quick-top">
-            <select id="quick-cmd"></select>
-            <button>Send</button>
-          </div>
-          <div id="quick-fields" class="quick-fields"></div>
-          <p id="quick-desc" class="quick-desc"></p>
-        </form>
-        <div class="g-broadcast">
-          <h3>Broadcast</h3>
-          <form id="broadcast-form" autocomplete="off">
-            <input id="broadcast-msg" placeholder="message to everyone online">
-            <button>Say</button>
-          </form>
-        </div>
-      </div>
+      <h3>Broadcast</h3>
+      <form id="broadcast-form" autocomplete="off">
+        <input id="broadcast-msg" placeholder="message to everyone online">
+        <button>Say</button>
+      </form>
     </section>
 
     <section class="panel" id="players-panel">
@@ -211,6 +199,38 @@
           <section class="panel" id="world-panel">
             <h2>World</h2>
             <dl class="facts" id="world-facts"><dt>–</dt><dd>loading…</dd></dl>
+          </section>
+          <section class="panel cmd-card" data-cmd="time">
+            <h2>Set time</h2>
+            <form autocomplete="off">
+              <div class="quick-fields"></div>
+              <button>Send</button>
+            </form>
+            <p class="quick-desc"></p>
+          </section>
+          <section class="panel cmd-card" data-cmd="weather">
+            <h2>Weather</h2>
+            <form autocomplete="off">
+              <div class="quick-fields"></div>
+              <button>Send</button>
+            </form>
+            <p class="quick-desc"></p>
+          </section>
+          <section class="panel cmd-card" data-cmd="gamerule">
+            <h2>Game rule</h2>
+            <form autocomplete="off">
+              <div class="quick-fields"></div>
+              <button>Send</button>
+            </form>
+            <p class="quick-desc"></p>
+          </section>
+          <section class="panel cmd-card" data-cmd="difficulty">
+            <h2>Difficulty</h2>
+            <form autocomplete="off">
+              <div class="quick-fields"></div>
+              <button>Send</button>
+            </form>
+            <p class="quick-desc"></p>
           </section>
         </div>
 
