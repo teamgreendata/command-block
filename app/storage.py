@@ -12,6 +12,8 @@ chest slots and inventory slots must describe items identically.
 """
 
 import json
+import threading
+import time
 from pathlib import Path
 
 from app import nbt
@@ -190,42 +192,83 @@ def _containers_in_region(path: Path, dim: str) -> list:
     return out
 
 
-def scan_containers(data_dir: Path) -> list:
-    """All player-relevant containers across the three dimensions, cached per
-    region file by (mtime, size)."""
-    world = None
+def _find_world(data_dir: Path) -> Path | None:
     try:
         for d in sorted(Path(data_dir).iterdir()):
             if (d / "players").is_dir() or (d / "playerdata").is_dir():
-                world = d
-                break
+                return d
     except OSError:
         pass
-    if world is None:
-        return []
-    containers: list = []
+    return None
+
+
+def _region_files(world: Path) -> list[tuple[Path, str]]:
+    out = []
     for dim in _DIMS:
         region_dir = world / "dimensions" / "minecraft" / dim / "region"
         if not region_dir.is_dir() and dim == "overworld":
             region_dir = world / "region"  # classic layout
         if not region_dir.is_dir():
             continue
-        for path in sorted(region_dir.glob("*.mca")):
-            try:
-                st = path.stat()
-            except OSError:
-                continue
-            key = str(path)
-            hit = _cache.get(key)
-            if hit and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
-                containers.extend(hit[2])
-                continue
+        out.extend((p, dim) for p in sorted(region_dir.glob("*.mca")))
+    return out
+
+
+# The scan runs as a background job so no HTTP request ever waits on region
+# parsing (a months-old world takes a minute+ on first scan). One job at a
+# time; requesters join the running one and read progress from scan_state.
+scan_state: dict = {"state": "idle"}
+_scan_lock = threading.Lock()
+
+
+def scan_containers(data_dir: Path) -> list:
+    """Synchronous full scan (kept for direct use + as the job body)."""
+    world = _find_world(data_dir)
+    diagnostics = {"world": str(world) if world else None,
+                   "regions": 0, "containers": 0, "chunk_errors": 0}
+    scan_state["diagnostics"] = diagnostics
+    if world is None:
+        return []
+    files = _region_files(world)
+    scan_state["regions_total"] = len(files)
+    containers: list = []
+    for done, (path, dim) in enumerate(files):
+        scan_state["regions_done"] = done
+        try:
+            st = path.stat()
+        except OSError:
+            continue
+        diagnostics["regions"] += 1
+        key = str(path)
+        hit = _cache.get(key)
+        if hit and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
+            found = hit[2]
+        else:
             try:
                 found = _containers_in_region(path, dim)
             except OSError:
+                diagnostics["chunk_errors"] += 1
                 continue
             _cache[key] = (st.st_mtime_ns, st.st_size, found)
-            containers.extend(found)
+        containers.extend(found)
+    diagnostics["containers"] = len(containers)
+    scan_state["regions_done"] = len(files)
     order = {d: i for i, d in enumerate(_DIMS)}
     containers.sort(key=lambda c: (order[c["dim"]], c["x"] or 0, c["z"] or 0, c["y"] or 0))
     return containers
+
+
+def run_scan(data_dir: Path) -> None:
+    """Job body: updates scan_state as it goes. Join if already running."""
+    if not _scan_lock.acquire(blocking=False):
+        return  # a scan is already running; callers poll scan_state
+    try:
+        scan_state.update({"state": "scanning", "regions_done": 0,
+                           "regions_total": 0, "error": None})
+        containers = scan_containers(data_dir)
+        scan_state.update({"state": "ready", "containers": containers,
+                           "generated_at": int(time.time())})
+    except Exception as exc:
+        scan_state.update({"state": "error", "error": str(exc)})
+    finally:
+        _scan_lock.release()

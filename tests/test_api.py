@@ -792,14 +792,28 @@ def test_positions_endpoint(client, monkeypatch):
 
 
 def test_storage_endpoint_fresh_semantics(client, mc_data, rcon_calls):
+    import time as _time
     from app import storage as storage_mod
     storage_mod._cache.clear()
+    storage_mod.scan_state.clear()
+    storage_mod.scan_state["state"] = "idle"
+    # plain GET kicks a scan without forcing a save; empty world finishes fast
     r = client.get("/api/storage")
     assert r.status_code == 200
-    assert r.json() == {"containers": []}  # fixture world has no region files
+    assert rcon_calls == []
+    for _ in range(50):
+        r = client.get("/api/storage")
+        if r.json()["state"] == "ready":
+            break
+        _time.sleep(0.05)
+    body = r.json()
+    assert body["state"] == "ready"
+    assert body["containers"] == []  # fixture world has no region files
+    assert body["diagnostics"]["regions"] == 0
+    # fresh=1 saves first, exactly once per kick
+    client.get("/api/storage?fresh=1")
     assert rcon_calls == [("save-all flush", False)]
-    client.get("/api/storage?fresh=0")
-    assert len(rcon_calls) == 1  # no second save
+    storage_mod.scan_state["state"] = "idle"
 
 
 def test_recovery_sources_and_upload(client, mc_data):

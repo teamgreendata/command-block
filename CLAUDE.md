@@ -30,7 +30,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 97 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 100 tests, no network, no MC server
 node --test                                   # frontend builders + stat/detail/forge/biome data: 54 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -179,8 +179,13 @@ template (set empty to disable avatar fetching).
   generation (classic `world/region` is the overworld fallback). Block entities with a
   `LootTable` key are UNTOUCHED world-gen loot chests — excluded, which is what makes
   the list "player-placed" (a looted dungeon chest is indistinguishable; UI says so).
-  Per-region (mtime,size) cache so refreshes only re-parse changed regions; scan runs
-  in a thread; `fresh=1` saves first like the inventory viewer. The shared item-view
+  Per-region (mtime,size) cache so refreshes only re-parse changed regions. The scan
+  is a BACKGROUND JOB (`run_scan` + module `scan_state`; one at a time, joiners poll):
+  `/api/storage` never blocks — it kicks/reports, the UI polls progress ("scanning
+  region 42/180…") every 1.5s, and an empty result carries diagnostics (world path,
+  region/error counts) so failures name themselves. First scan of a months-old world
+  is a minute-plus; that's why this exists. `fresh=1` saves first like the inventory
+  viewer. The shared item-view
   helpers (`item_view`, `_component_lines`…) moved here from main (main re-exports for
   its inventory endpoint + tests). Chunk length field counts the compression byte —
   slice `blob[5:4+length]`. Live-validated: chests placed over RCON on the throwaway

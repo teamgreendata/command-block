@@ -1171,17 +1171,32 @@ async def positions():
 
 
 @app.get("/api/storage")
-async def storage_scan(fresh: int = 1):
-    """Every player-relevant container in the world with its contents. Block
-    entities only hit disk on save, so fresh=1 asks the server to save first."""
-    if fresh:
-        try:
-            await rcon_command("save-all flush")
-            await asyncio.sleep(0.3)
-        except RconError:
-            pass
-    containers = await asyncio.to_thread(storage.scan_containers, _data_dir())
-    return {"containers": containers}
+async def storage_scan(fresh: int = 0):
+    """Non-blocking: reports the background scan's state, kicking one off when
+    idle (or when the client asks fresh=1 to re-scan after a world save). The
+    first scan of a big world takes a while — progress streams via scan_state."""
+    state = storage.scan_state.get("state", "idle")
+    if fresh or state == "idle":
+        if fresh:
+            try:
+                await rcon_command("save-all flush")
+                await asyncio.sleep(0.3)
+            except RconError:
+                pass
+        if storage.scan_state.get("state") != "scanning":
+            asyncio.get_running_loop().run_in_executor(
+                None, storage.run_scan, _data_dir())
+            await asyncio.sleep(0.1)  # let a tiny world finish inside one request
+    s = storage.scan_state
+    out = {"state": s.get("state", "idle"),
+           "regions_done": s.get("regions_done", 0),
+           "regions_total": s.get("regions_total", 0),
+           "diagnostics": s.get("diagnostics"),
+           "generated_at": s.get("generated_at"),
+           "error": s.get("error")}
+    if s.get("state") == "ready":
+        out["containers"] = s.get("containers", [])
+    return out
 
 
 @app.get("/api/inventory/{name}")

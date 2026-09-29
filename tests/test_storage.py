@@ -55,11 +55,15 @@ def stack(slot, item_id, count, *components):
 @pytest.fixture
 def world(tmp_path):
     storage._cache.clear()
+    storage.scan_state.clear()
+    storage.scan_state["state"] = "idle"
     (tmp_path / "world" / "playerdata").mkdir(parents=True)
     for dim in ("overworld", "the_nether", "the_end"):
         (tmp_path / "world" / "dimensions" / "minecraft" / dim / "region").mkdir(parents=True)
     yield tmp_path
     storage._cache.clear()
+    storage.scan_state.clear()
+    storage.scan_state["state"] = "idle"
 
 
 def _region_dir(world, dim):
@@ -141,3 +145,49 @@ def test_scan_handles_garbage_chunks(world):
     (_region_dir(world, "overworld") / "r.0.0.mca").write_bytes(
         bytes(header) + b"\x00\x00\x00\x08\x02notzlib".ljust(4096, b"\x00"))
     assert storage.scan_containers(world) == []
+
+
+def test_run_scan_job_lifecycle_and_diagnostics(world):
+    chest = block_entity("minecraft:chest", 1, 64, 1,
+                         items=[stack(0, "minecraft:dirt", 1)])
+    (_region_dir(world, "overworld") / "r.0.0.mca").write_bytes(
+        region_file(chunk_nbt(0, 0, chest)))
+    storage.run_scan(world)
+    s = storage.scan_state
+    assert s["state"] == "ready"
+    assert s["regions_done"] == s["regions_total"] == 1
+    assert len(s["containers"]) == 1
+    assert s["diagnostics"] == {"world": str(world / "world"), "regions": 1,
+                                "containers": 1, "chunk_errors": 0}
+    assert isinstance(s["generated_at"], int)
+
+
+def test_run_scan_reports_missing_world(tmp_path):
+    storage.scan_state.clear()
+    storage.run_scan(tmp_path / "nothing-here")
+    assert storage.scan_state["state"] == "ready"
+    assert storage.scan_state["containers"] == []
+    assert storage.scan_state["diagnostics"]["world"] is None
+
+
+def test_run_scan_joins_instead_of_duplicating(world, monkeypatch):
+    import threading
+    release = threading.Event()
+    started = threading.Event()
+
+    def slow(path, dim):
+        started.set()
+        release.wait(timeout=5)
+        return []
+
+    (_region_dir(world, "overworld") / "r.0.0.mca").write_bytes(
+        region_file(chunk_nbt(0, 0)))
+    monkeypatch.setattr(storage, "_containers_in_region", slow)
+    t = threading.Thread(target=storage.run_scan, args=(world,))
+    t.start()
+    started.wait(timeout=5)
+    storage.run_scan(world)  # must return immediately, not run a second scan
+    assert storage.scan_state["state"] == "scanning"
+    release.set()
+    t.join(timeout=5)
+    assert storage.scan_state["state"] == "ready"

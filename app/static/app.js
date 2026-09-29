@@ -901,20 +901,50 @@ function renderStorage() {
   }
 }
 
+let storagePollTimer = null;
+
 async function refreshStorage(force) {
   if (storageContainers !== null && !force) { renderStorage(); return; }
-  $('#st-count').textContent = 'scanning world…';
+  clearTimeout(storagePollTimer);
+  let s;
   try {
-    const s = await api('/api/storage');
-    storageContainers = s.containers;
+    s = await api(`/api/storage${force ? '?fresh=1' : ''}`);
   } catch (e) {
     $('#st-count').textContent = e.message;
     return;
   }
-  renderStorage();
+  if (s.state === 'scanning') {
+    $('#st-count').textContent = s.regions_total
+      ? `scanning region ${s.regions_done}/${s.regions_total}…`
+      : 'scanning world…';
+    // keep polling only while the tab is being looked at
+    if (location.hash.slice(1) === 'storage' || location.hash === '') {
+      storagePollTimer = setTimeout(() => refreshStorage(false), 1500);
+    }
+    return;
+  }
+  if (s.state === 'error') {
+    $('#st-count').textContent = `scan failed: ${s.error}`;
+    return;
+  }
+  if (s.state === 'ready') {
+    storageContainers = s.containers;
+    renderStorage();
+    if (!s.containers.length && s.diagnostics) {
+      const d = s.diagnostics; // an empty result explains itself
+      $('#st-count').textContent = d.world
+        ? `0 containers (scanned ${d.regions} regions, ${d.chunk_errors} unreadable)`
+        : 'no world found on the data mount';
+    }
+    return;
+  }
+  $('#st-count').textContent = 'scan idle — press refresh';
 }
 
-$('#st-refresh').addEventListener('click', () => refreshStorage(true));
+$('#st-refresh').addEventListener('click', () => {
+  storageContainers = null;
+  refreshStorage(true);
+});
 $('#st-search').addEventListener('input', renderStorage);
 
 // ---------------------------------------------------------------- gear recovery
