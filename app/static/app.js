@@ -948,18 +948,20 @@ function renderStorage() {
     totalsWrap.appendChild(chip);
   }
 
-  const wrap = $('#st-containers');
-  wrap.replaceChildren();
-  for (const c of shown) {
-    const card = el('div', 'st-card');
-    const head = el('div', 'st-head');
-    head.appendChild(el('span', 'st-kind', c.name ? `“${c.name}”` : c.kind));
-    head.appendChild(el('span', 'st-where',
-      `${c.x} ${c.y} ${c.z} · ${DIM_SHORT[c.dim] || c.dim}${c.name ? ` · ${c.kind}` : ''}`));
-    card.appendChild(head);
-    card.appendChild(invGrid(c.items, [...Array(27).keys()], 9));
-    wrap.appendChild(card);
-  }
+  // Per-container cards are retired for now (totals only, per the owner) —
+  // uncomment this block to bring back one chest-grid card per container.
+  // const wrap = $('#st-containers');
+  // wrap.replaceChildren();
+  // for (const c of shown) {
+  //   const card = el('div', 'st-card');
+  //   const head = el('div', 'st-head');
+  //   head.appendChild(el('span', 'st-kind', c.name ? `“${c.name}”` : c.kind));
+  //   head.appendChild(el('span', 'st-where',
+  //     `${c.x} ${c.y} ${c.z} · ${DIM_SHORT[c.dim] || c.dim}${c.name ? ` · ${c.kind}` : ''}`));
+  //   card.appendChild(head);
+  //   card.appendChild(invGrid(c.items, [...Array(27).keys()], 9));
+  //   wrap.appendChild(card);
+  // }
 }
 
 let storagePollTimer = null;
