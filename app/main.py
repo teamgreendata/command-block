@@ -125,13 +125,28 @@ def tail_lines(path: Path, count: int, include_rcon: bool = False) -> list[str]:
 # ---------------------------------------------------------------- auth & errors
 
 
+# Routes a read-only STATS_TOKEN may reach (bearer auth). Everything else stays
+# behind the admin Basic login. Keep this list to pure reads of world files.
+STATS_TOKEN_ROUTES = frozenset({"/api/playerstats"})
+
+
+def _stats_token_ok(request: Request) -> bool:
+    token = _env("STATS_TOKEN")
+    if not token or request.url.path not in STATS_TOKEN_ROUTES:
+        return False
+    supplied = request.headers.get("authorization", "")
+    if not supplied.startswith("Bearer "):
+        return False
+    return secrets.compare_digest(supplied[7:].strip(), token)
+
+
 @app.middleware("http")
 async def basic_auth(request: Request, call_next):
     user, password = _env("DASH_USER"), _env("DASH_PASS")
     if user and password and request.url.path != "/healthz":
         supplied = request.headers.get("authorization", "")
-        ok = False
-        if supplied.startswith("Basic "):
+        ok = _stats_token_ok(request)
+        if not ok and supplied.startswith("Basic "):
             try:
                 got_user, _, got_pass = base64.b64decode(supplied[6:]).decode().partition(":")
                 user_ok = secrets.compare_digest(got_user, user)

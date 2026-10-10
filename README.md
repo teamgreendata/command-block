@@ -43,7 +43,9 @@ pixel font (SIL OFL 1.1). Still zero external requests at runtime.
   mc-heads.net) so the browser never talks to the internet; set `AVATAR_URL=` empty
   to disable fetching entirely (cards then show a built-in placeholder face).
 - Optional HTTP Basic auth via `DASH_USER`/`DASH_PASS`; `/healthz` always stays open
-  for Uptime Kuma.
+  for Uptime Kuma. An optional `STATS_TOKEN` lets a trusted service read
+  `/api/playerstats` (only) with a bearer header — used by the Green Phoenix
+  dashboard's sync for Minecraft hours.
 - **LAN/Tailscale only. Never add this to a tunnel or reverse proxy.**
 
 ## Deploy

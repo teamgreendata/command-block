@@ -37,7 +37,9 @@ docker compose up -d --build                  # the real deployment (needs .env)
 ```
 
 Config is env-only: `RCON_HOST/PORT/PASSWORD`, `DASH_PORT`, optional `DASH_USER`/`DASH_PASS`
-(both set = HTTP Basic auth on everything except `/healthz`). `LOG_FILE` overrides the log
+(both set = HTTP Basic auth on everything except `/healthz`), optional `STATS_TOKEN` (a
+bearer token that opens **only** the routes in `STATS_TOKEN_ROUTES` — today `/api/playerstats`
+— for the Green Phoenix sync; never widen that set to anything that writes or runs RCON). `LOG_FILE` overrides the log
 path (`/mc-logs/latest.log` in-container) and `MC_DATA` the data-dir mount (`/mc-data`) —
 both used by tests and local runs only. `AVATAR_URL` overrides the player-head source
 template (set empty to disable avatar fetching).

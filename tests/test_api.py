@@ -165,6 +165,29 @@ def test_auth_enforced_when_env_set(monkeypatch, rcon_calls):
     assert c.get("/healthz").status_code == 200
 
 
+def test_stats_token_reads_playerstats_only(monkeypatch, rcon_calls, mc_data):
+    monkeypatch.setenv("DASH_USER", "rob")
+    monkeypatch.setenv("DASH_PASS", "hunter2")
+    monkeypatch.setenv("STATS_TOKEN", "read-only-token")
+    c = TestClient(app)
+    bearer = {"Authorization": "Bearer read-only-token"}
+    # The token opens exactly the stats read…
+    assert c.get("/api/playerstats", headers=bearer).status_code == 200
+    # …not the admin surface, and a wrong token opens nothing.
+    assert c.get("/api/players", headers=bearer).status_code == 401
+    assert c.get("/api/playerstats", headers={"Authorization": "Bearer nope"}).status_code == 401
+    assert c.get("/api/playerstats").status_code == 401
+    # The admin login still works for the same route.
+    assert c.get("/api/playerstats", headers=_basic("rob", "hunter2")).status_code == 200
+
+
+def test_stats_token_ignored_without_basic_auth(monkeypatch, rcon_calls):
+    # With no DASH_USER/PASS the app is open anyway; the token must not lock it.
+    monkeypatch.setenv("STATS_TOKEN", "read-only-token")
+    c = TestClient(app)
+    assert c.get("/api/players").status_code == 200
+
+
 def test_broadcast_flattens_whitespace(client, rcon_calls):
     r = client.post("/api/broadcast", json={"message": "hello\neveryone   there"})
     assert r.status_code == 200
