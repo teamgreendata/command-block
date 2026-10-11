@@ -46,6 +46,15 @@ template (set empty to disable avatar fetching).
 
 ## Gotchas & conventions
 
+- ⚠️ **The server is Paper 26.3 now** (updated ~2026-10). 26.3 changed RCON phrasings:
+  gamerule responses dropped the colon ("Game rule X is currently set to true";
+  26.2: "Gamerule X is currently set to: true") — parsers must accept both
+  (`set to:?`). Everything else verified working against the live server: status,
+  list, tps, timeline time query, data get Pos/Dimension, seed/difficulty/mspt,
+  whitelist, give component syntax, map tile rendering, storage scan. When a prod
+  endpoint mysteriously returns nulls after a server update, probe the live phrasing
+  via POST /api/command first.
+
 - **Developed on the K12, deployed on webnode.** This repo lives on `teamgreenserver`
   (the K12, 10.0.0.60 — the Claude Code host), but the Minecraft server lives on
   **`webnode` (10.0.0.64)** since the 2026-07 migration, and that's where this stack

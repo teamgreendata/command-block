@@ -197,9 +197,11 @@ def test_broadcast_flattens_whitespace(client, rcon_calls):
 def test_keepinv_reports_each_dimension(client, monkeypatch):
     async def fake(command, *, expect_disconnect=False):
         if command.startswith("execute in minecraft:the_nether"):
-            return "Gamerule keep_inventory is currently set to: false"
+            # Paper 26.3 phrasing: no colon, "Game rule" two words
+            return "Game rule keep_inventory is currently set to false"
         if command.startswith("execute in minecraft:the_end"):
             raise RconError("hiccup")
+        # Paper 26.2 phrasing: with colon — both generations must parse
         return "Gamerule keep_inventory is currently set to: true"
 
     monkeypatch.setattr(main, "rcon_command", fake)

@@ -1067,7 +1067,7 @@ async def recap_test(body: RecapTest):
 
 # Game rules are per-dimension in this generation — after the nether gear-loss
 # incident the dashboard shows keep_inventory for all three, queried live.
-_GAMERULE_VALUE_RE = re.compile(r"set to: (\w+)")
+_GAMERULE_VALUE_RE = re.compile(r"set to:? (\w+)")  # 26.2 used a colon; 26.3 dropped it
 _DIM_PREFIXES = {
     "overworld": "",
     "nether": "execute in minecraft:the_nether run ",
