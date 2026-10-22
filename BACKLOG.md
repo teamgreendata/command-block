@@ -1,5 +1,7 @@
 # command-block backlog
 
+## Owner actions
+
 - [ ] Re-run the plan's Part A checks **on webnode** (network name, restart policy, `.env`, port 8300 free, log path) — the 2026-08-02 pass ran on the K12's stale soak copy by mistake
 - [ ] Deploy on webnode (build plan Part F): clone to `/opt/stacks/command-block`, write `.env`, `docker compose up -d --build`
 - [ ] Run Part G acceptance tests against the real server (incl. the restart button)

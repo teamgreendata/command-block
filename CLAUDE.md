@@ -12,6 +12,7 @@ authoritative spec; deployment is that plan's Part F.
 - **Always recommend when asking.** With `AskUserQuestion` or options in prose, name the option you'd pick, whether the lean is **strong** or **weak**, and a one-line why — no neutral menus.
 - **Build in milestones and pause** so the user can run each slice before you go deeper; don't start a major new phase without a go-ahead.
 - **Keep this file current** — folding session gotchas, non-obvious behavior, and decisions back into `CLAUDE.md` is a pre-commit step, not an afterthought.
+- **Hand owner-only tasks to the dashboard.** Anything Rob must do himself (buy, deploy on another host, set an env var, click in a vendor UI) goes as a `- [ ] **Short title** — detail` line under `## Owner actions` in the project's `BACKLOG.md` (create the file/section if missing; keep titles unique — the title is the sync key). The Green Phoenix sync tags these `owner` and shows them at `/assigned-tasks` + the "Assigned to me" tile; a box ticked there is written back to this file, so read the file, don't assume.
 - **Verify behavior, not just types** — run the build/tests before committing and actually exercise user-facing changes before claiming they work. Small, reviewable commits; run the test suite on every change to tested code.
 - Never commit secrets or `.env`. Keep answers concise and direct.
 <!-- END:baseline-conventions -->
