@@ -184,6 +184,15 @@ main {
   user-select: none;
 }
 #map-viewport:active { cursor: grabbing; }
+.panel[hidden] { display: none; }
+#bluemap-frame {
+  display: block;
+  width: 100%;
+  height: 75vh;
+  min-height: 320px;
+  background: #0b0b12;
+  border: 2px solid #555;
+}
 #map-plane { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .map-tile { position: absolute; width: 512px; height: 512px; image-rendering: pixelated; }
 #map-markers { position: absolute; inset: 0; pointer-events: none; }

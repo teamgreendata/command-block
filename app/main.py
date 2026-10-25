@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, Query, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from mcstatus import JavaServer
 from pydantic import BaseModel
@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 
-from app import mapper, nbt, rcon, recap, storage
+from app import bluemap, mapper, nbt, rcon, recap, storage
 from app.rcon import RconError
 
 PING_PORT = 25565  # server-list ping; RCON port comes from the env
@@ -1310,11 +1310,80 @@ async def map_structures(dim: str = "overworld"):
                 "regions_done": storage.scan_state.get("regions_done", 0),
                 "regions_total": storage.scan_state.get("regions_total", 0),
                 "structures": []}
-    found = recap._read_json(_discoveries_path(), {})
-    known = {s["key"] for s in storage.scan_state.get("structures", [])}
-    out = [dict(entry, key=key) for key, entry in found.items()
-           if entry.get("dim") == dim and (key in known or not known)]
-    return {"state": "ready", "structures": out}
+    return {"state": "ready", "structures": _discovered_structures(dim)}
+
+
+def _discovered_structures(dim: str) -> list:
+    """Discovered entries for one dimension, each with a y at its pieces' middle."""
+    scanned = {s["key"]: s for s in storage.scan_state.get("structures", [])}
+    out = []
+    for key, entry in recap._read_json(_discoveries_path(), {}).items():
+        if entry.get("dim") != dim or (scanned and key not in scanned):
+            continue
+        pieces = scanned.get(key, {}).get("pieces") or []
+        y = (min(p[1] for p in pieces) + max(p[4] for p in pieces)) // 2 if pieces else 64
+        out.append(dict(entry, key=key, y=y))
+    return out
+
+
+# ---------------------------------------------------------------- BlueMap
+
+def _bluemap_base() -> str | None:
+    return (_env("BLUEMAP_URL") or "").rstrip("/") or None
+
+
+@app.get("/api/map/config")
+async def map_config():
+    return {"bluemap": _bluemap_base() is not None}
+
+
+@app.get("/bluemap")
+async def bluemap_root():
+    return RedirectResponse("/bluemap/")  # the app's asset paths are relative
+
+
+@app.get("/bluemap/{path:path}")
+async def bluemap_proxy(path: str, request: Request):
+    base = _bluemap_base()
+    if base is None:
+        return JSONResponse(status_code=404,
+                            content={"error": "BlueMap isn't configured (BLUEMAP_URL)."})
+    if bluemap.SSE_RE.match(path):
+        # Refused on purpose: BlueMap's SSE pushes whole marker lists that would
+        # erase the injected sets. A failed stream makes the app poll instead;
+        # 204 fails EventSource for good (no reconnect) without a console error.
+        return Response(status_code=204)
+    quoted = bluemap.safe_path(path)
+    if quoted is None:
+        return _bad_request("Bad path.")
+    url = f"{base}/{quoted}" + (f"?{request.url.query}" if request.url.query else "")
+    m = bluemap.MARKERS_RE.match(path)
+    if m:
+        return await _bluemap_markers(url, m.group(1))
+    headers = {k: v for k in bluemap.REQUEST_HEADERS if (v := request.headers.get(k))}
+    try:
+        status, upstream, body = await asyncio.to_thread(bluemap.fetch, url, headers)
+    except OSError:
+        return Response(status_code=502, media_type="text/plain",
+                        content=f"BlueMap isn't answering at {base} — is the plugin "
+                                "installed and its web server enabled?")
+    return Response(content=body, status_code=status,
+                    headers=bluemap.reply_headers(upstream))
+
+
+async def _bluemap_markers(url: str, map_id: str) -> JSONResponse:
+    try:
+        status, _, body = await asyncio.to_thread(
+            bluemap.fetch, url, {"accept-encoding": "identity"})
+        upstream = json.loads(body) if status == 200 else {}
+    except (OSError, ValueError):
+        upstream = {}
+    if not isinstance(upstream, dict):
+        upstream = {}
+    dim = bluemap.dim_for_map(map_id)
+    ours = bluemap.marker_sets(dim, _load_waypoints(), _discovered_structures(dim))
+    return JSONResponse(bluemap.merge_markers(upstream, ours),
+                        headers={"cache-control": "no-store"})
 
 
 @app.get("/api/storage")
