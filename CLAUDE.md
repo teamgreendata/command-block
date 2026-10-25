@@ -31,7 +31,7 @@ never add it to a tunnel, Caddy, or any reverse proxy.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-.venv/bin/python -m pytest                    # backend: 118 tests, no network, no MC server
+.venv/bin/python -m pytest                    # backend: 107 tests, no network, no MC server
 node --test                                   # frontend builders + stat/detail/forge/biome data: 54 tests (bare, not `node --test tests/`)
 RCON_HOST=... RCON_PASSWORD=... .venv/bin/uvicorn app.main:app --port 8300
 docker compose up -d --build                  # the real deployment (needs .env)
@@ -43,8 +43,7 @@ bearer token that opens **only** the routes in `STATS_TOKEN_ROUTES` — today `/
 — for the Green Phoenix sync; never widen that set to anything that writes or runs RCON). `LOG_FILE` overrides the log
 path (`/mc-logs/latest.log` in-container) and `MC_DATA` the data-dir mount (`/mc-data`) —
 both used by tests and local runs only. `AVATAR_URL` overrides the player-head source
-template (set empty to disable avatar fetching). `BLUEMAP_URL` (prod:
-`http://minecraft:8100`) switches the Map tab to BlueMap — see the World map bullet.
+template (set empty to disable avatar fetching).
 
 ## Gotchas & conventions
 
@@ -66,17 +65,17 @@ template (set empty to disable avatar fetching). `BLUEMAP_URL` (prod:
 - The K12's old soak-period copy of the minecraft stack is **gone** (no
   `/opt/stacks/minecraft` on the K12 as of 2026-10-24) — there is no local world to
   probe. E2E-test against a throwaway server instead (recipe below).
-- **Throwaway rig recipe** (what the BlueMap E2E used; names must never look like the
-  real stacks): `docker network create cb-e2e-net`; `docker run -d --name mc-e2e
-  --network cb-e2e-net -v <scratch>/rig-data:/data -e EULA=TRUE -e TYPE=PAPER
-  -e VERSION=26.3 -e MEMORY=2G -e MODRINTH_PROJECTS=bluemap -e RCON_PASSWORD=…
-  -e VIEW_DISTANCE=4 -p 127.0.0.1:18100:8100 -p 127.0.0.1:35575:25575
-  itzg/minecraft-server:2026.9.1` (the live image tag); dashboard as a container from
-  `docker build -t cb-e2e-dash .` on the same network with `MC_DATA`/logs mounted from
-  the rig dir. Nobody joins a rig, so almost nothing is "fully generated": `rcon-cli --
-  forceload add -128 -128 127 127` (the `--` is required for negative numbers) +
-  `save-all flush` before expecting terrain. ⚠️ **Tear it down when done** (`docker rm
-  -f mc-e2e cb-e2e`, `docker network rm cb-e2e-net`) — a forgotten rig once ran 10 days.
+- **Throwaway rig recipe** (names must never look like the real stacks):
+  `docker network create cb-e2e-net`; `docker run -d --name mc-e2e --network cb-e2e-net
+  -v <scratch>/rig-data:/data -e EULA=TRUE -e TYPE=PAPER -e VERSION=26.3 -e MEMORY=2G
+  -e RCON_PASSWORD=… -e VIEW_DISTANCE=4 -p 127.0.0.1:35575:25575
+  itzg/minecraft-server:2026.9.1` (the live image tag); run the dashboard as a container
+  from `docker build -t cb-e2e-dash .` on the same network with `MC_DATA`/logs mounted
+  from the rig dir. Nobody joins a rig, so almost nothing is "fully generated":
+  `rcon-cli -- forceload add -128 -128 127 127` (the `--` is required for negative
+  numbers) + `save-all flush` before expecting terrain. ⚠️ **Tear it down when done**
+  (`docker rm -f mc-e2e cb-e2e`, `docker network rm cb-e2e-net`) — a forgotten rig once
+  ran 10 days.
 - `compose.yaml` joins the **external** network `minecraft_default` — compose errors at
   `up` if the minecraft stack has never been started on the host.
 - After a manual `docker compose stop` of the minecraft stack (on webnode), the restart
@@ -205,31 +204,12 @@ template (set empty to disable avatar fetching). `BLUEMAP_URL` (prod:
   Advancement backfill credits find_fortress/find_bastion/trials/follow_ender_eye
   ONLY when exactly one candidate of the type exists (never guess).
   Block palettes pack at ≥4 bits non-spanning; heightmaps 9 bits; y = yPos*16 + hm - 1.
-- **BlueMap replaces the built-in map when `BLUEMAP_URL` is set** (`app/bluemap.py` +
-  the `/bluemap/` routes in main). BlueMap 5.29 is a Paper plugin inside the minecraft
-  container; its web server (8100) is **never published** — the dashboard proxies it
-  at `/bluemap/` over the stack network, so it inherits the dashboard's origin, Basic
-  login and LAN/tailnet reach (and the tailnet ACL for `:8300`). This is the dashboard
-  *acting* as a proxy for an internal service, not the dashboard behind one; it's a
-  Docker-network call, not a third internet call class. Server-side setup:
-  `~/notes/guides/bluemap-live-v1_0.md` (rig-verified). Proxy rules: forward
-  Accept-Encoding/If-None-Match/If-Modified-Since, pass Content-Encoding back untouched
-  (hires tiles are gzip), never follow redirects (BlueMap 303s directories to an
-  absolute `/path/` — rewrite `Location` under `/bluemap`), refuse `..` segments.
-  `maps/<id>/live/markers.json` is intercepted: our marker sets `cb-waypoints` and
-  `cb-structures` (POIs, SVG data-URI icons in the STRUCTURE_STYLES palette — a
-  Python copy lives in `bluemap.py`; `classes: []` is mandatory, BlueMap spreads it)
-  are merged into the plugin's own sets; map id → dimension by name (`world`,
-  `world_the_nether`/`world_nether`, `world_the_end`); structure y = middle of its
-  scanned piece boxes. ⚠️ **`maps/<id>/live/sse` is refused with 204 on purpose**:
-  BlueMap's SSE pushes whole marker lists (replacing every set except players), which
-  would erase ours; a failed EventSource makes the web app poll instead (players 1s,
-  markers 10s). Cost: re-rendered terrain shows on next load, not live. The frontend
-  probes `/api/map/config` + `/bluemap/settings.json`; configured-but-down shows the
-  built-in map with a notice. The iframe is unloaded (`about:blank`) when leaving the
-  tab — BlueMap polls every second otherwise — and reopened at the saved camera hash.
-  Spoiler note: BlueMap draws all *generated* terrain; overworld caves below y=55 are
-  hidden by default, but the Nether map shows everything under the roof.
+- **Decided 2026-10-25: no BlueMap on the live server.** A BlueMap Map tab (plugin's
+  web app proxied at `/bluemap/`, waypoints/discoveries injected as marker sets) was
+  built and rig-verified in `4423f72`, then reverted at the user's request before it
+  was deployed. Don't re-propose it; the built-in map is the map. If the user ever
+  asks again, reverting the revert restores it (BlueMap stays on the bot sandbox only,
+  per `~/notes/guides/bluemap-sandbox-v1_0.md`).
 - **Storage tab** (`app/storage.py`): scans region files for placed containers
   (chest/trapped_chest/barrel/shulker_box block entities; all shulker colors share one
   be-id). ⚠️ Regions live under `world/dimensions/minecraft/<dim>/region` in this
@@ -260,8 +240,7 @@ template (set empty to disable avatar fetching). `BLUEMAP_URL` (prod:
 - UI structure: eight hash-routed top tabs — **Dashboard** (three benign presets
   Day/Night/Clear-weather + keep-inventory badges + broadcast + a full-body card per
   whitelisted/online player; the global command builder lives under Settings › Server
-  Info now), **Map** (BlueMap when configured, else the built-in map; live players),
-  **Waypoints**, **Forge**
+  Info now), **Map** (world map + live players), **Waypoints**, **Forge**
   (enchanted-item builder), **Biomes** (natural-item catalog with sprites + give),
   **Storage** (all placed containers + contents, searchable), **Recovery** (gear
   restoration from saves/backups), **Settings**. The Settings page is a shell with a

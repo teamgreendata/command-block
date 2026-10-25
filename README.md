@@ -1,8 +1,7 @@
 # command-block
 
 A small self-hosted admin dashboard for the Minecraft server stack — a live world
-map (BlueMap's 3D/flat view when the server runs the BlueMap plugin, otherwise one
-rendered from the region files) with realtime player markers, your waypoints and
+map rendered from the region files with realtime player markers and
 discovered-only structure markers (no seed spoilers — places appear when you
 actually set foot in them), live status
 with an in-game clock/weather widget, a Server Info tab (day count, uptime, world
@@ -47,10 +46,6 @@ pixel font (SIL OFL 1.1). Still zero external requests at runtime.
   for Uptime Kuma. An optional `STATS_TOKEN` lets a trusted service read
   `/api/playerstats` (only) with a bearer header — used by the Green Phoenix
   dashboard's sync for Minecraft hours.
-- Optional BlueMap: with the plugin on the server and `BLUEMAP_URL=http://minecraft:8100`
-  set, the Map tab embeds BlueMap's web app, proxied at `/bluemap/` over the stack
-  network (no published port, same login), with waypoints and discovered structures
-  added to its marker menu. Server-side setup: `~/notes/guides/bluemap-live-v1_0.md`.
 - **LAN/Tailscale only. Never add this to a tunnel or reverse proxy.**
 
 ## Deploy

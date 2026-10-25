@@ -9,5 +9,3 @@
 - [ ] Uptime Kuma (lifeboat): HTTP monitor on `http://10.0.0.64:8300/healthz`
 - [ ] network-reference v1_3 bump: webnode `:8300` = command-block
 - [ ] Vaultwarden entry for the RCON password (referenced by two `.env` files on webnode)
-- [ ] **Install BlueMap on the live server** — webnode, `~/notes/guides/bluemap-live-v1_0.md` Steps 1–2 (one server restart; first render ~1–4 h, do it when nobody's on)
-- [ ] **Turn on the BlueMap Map tab** — webnode: `cd /opt/stacks/command-block && git pull`, add `BLUEMAP_URL=http://minecraft:8100` to `.env`, `docker compose up -d --build` (guide Step 3)

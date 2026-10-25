@@ -540,55 +540,9 @@ async function pollPositions() {
   } catch { /* keep last markers */ }
 }
 
-// BlueMap (BLUEMAP_URL set + answering) replaces the built-in map; the
-// built-in one stays as the fallback. The iframe is unloaded while the tab is
-// hidden (BlueMap polls players every second) and reopens at the last camera.
-const blueMap = { configured: null, on: false, loaded: false, hash: '' };
-
-async function blueMapUsable() {
-  if (blueMap.on) return true;
-  try {
-    if (blueMap.configured === null) {
-      blueMap.configured = (await api('/api/map/config')).bluemap;
-    }
-    if (!blueMap.configured) return false;
-    const r = await fetch('/bluemap/settings.json', { cache: 'no-store' });
-    blueMap.on = r.ok;
-  } catch { blueMap.on = false; }
-  const notice = $('#map-notice');
-  notice.hidden = blueMap.on || !blueMap.configured;
-  notice.textContent = 'BlueMap is configured but not answering — showing the built-in map.';
-  $('#bluemap-panel').hidden = !blueMap.on;
-  $('#map-panel').hidden = blueMap.on;
-  return blueMap.on;
-}
-
-function setBlueMapLoaded(load) {
-  const frame = $('#bluemap-frame');
-  if (load && !blueMap.loaded) {
-    frame.src = `/bluemap/${blueMap.hash}`;
-    blueMap.loaded = true;
-  } else if (!load && blueMap.loaded) {
-    try { blueMap.hash = frame.contentWindow.location.hash; } catch { /* keep the last one */ }
-    frame.src = 'about:blank';
-    blueMap.loaded = false;
-  }
-}
-
-$('#bluemap-full').addEventListener('click', () => {
-  let hash = blueMap.hash;
-  try { hash = $('#bluemap-frame').contentWindow.location.hash || hash; } catch { /* last known */ }
-  window.open(`/bluemap/${hash}`, '_blank', 'noopener');
-});
-
-async function setMapActive(active) {
+function setMapActive(active) {
   if (active && !mapState.active) {
     mapState.active = true;
-    if (await blueMapUsable()) {
-      if (mapState.active) setBlueMapLoaded(true);
-      return;
-    }
-    if (!mapState.active) return;
     loadMapTiles();
     loadMapStructures();
     pollPositions();
@@ -596,7 +550,6 @@ async function setMapActive(active) {
   } else if (!active && mapState.active) {
     mapState.active = false;
     clearInterval(mapState.timer);
-    setBlueMapLoaded(false);
   }
 }
 
